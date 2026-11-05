@@ -21,16 +21,21 @@ Prompts:
 
 ## 3. How the Model Works  
 
-Explain your scoring approach in simple language.  
+Think of the recommender as a judge holding a scorecard. You tell it what you're in the mood for: a favorite genre, a favorite mood, and how energetic you want the music to be. You can also say how happy-sounding (valence) and how acoustic you want it. The judge then goes through every song in the catalog, one at a time, and gives each one points.
 
-Prompts:  
+**How a song earns points:**
 
-- What features of each song are used (genre, energy, mood, etc.)  
-- What user preferences are considered  
-- How does the model turn those into a score  
-- What changes did you make from the starter logic  
+- **Genre (up to 2 points).** A song in your exact genre gets 2 points. A closely related genre, like "indie pop" when you asked for "pop", gets 1 point.
+- **Mood (up to 1.5 points).** An exact mood match gets 1.5 points. A mood in the same "family" gets half credit. For example, if you asked for "chill", a "relaxed" or "peaceful" song still earns 0.75, because they feel similar.
+- **Energy (up to 1.5 points), happiness (up to 1 point) and acoustic sound (up to 0.5 points).** These are about being *close* to what you asked for, not about being high or low. If you want energy around 0.4, a song at 0.4 gets full points, a song at 0.5 gets most of them, and a very loud song at 0.9 gets nothing. Being "more energetic" isn't better; being "closer to what you wanted" is.
 
-Avoid code here. Pretend you are explaining the idea to a friend who does not program.
+The best possible score is 6.5. Once every song has a score, the judge lines them up from highest to lowest and hands you the top five. If two songs tie, the one whose energy is closer to what you asked for goes first.
+
+Every recommendation comes with its reasons, like "genre match (+2.00)" or "similar mood: relaxed (+0.75)", so you can see exactly why a song made the list.
+
+**Why these weights?** Genre counts slightly more than mood because it's usually the clearest statement of what someone likes. I kept the gap small on purpose. When I tested a version where genre was worth much more, it recommended an intense workout song to someone who asked for calm pop music, just because the song was labeled "pop." The labels (genre and mood) and the sound measurements (energy, happiness, acoustic) are worth about the same in total, so neither one can win on its own.
+
+**Changes from the starter logic:** the starter code returned the first five songs in the file, no matter what you asked for. I replaced that with the point system above. I also added "similar genre" and "similar mood family" partial credit, so near-misses aren't treated as complete misses. Finally, I chose not to score tempo or danceability, because in this catalog they almost always move together with energy and would just count the same thing twice.
 
 ---
 
