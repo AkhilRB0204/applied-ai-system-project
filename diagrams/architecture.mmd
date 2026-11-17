@@ -1,0 +1,47 @@
+%% VibeMatch music recommender: system architecture
+%% Shows how data flows from the song catalog and user profiles
+%% through the scoring engine to ranked, explained recommendations.
+
+flowchart TD
+    subgraph Inputs["Inputs"]
+        CSV[("data/songs.csv<br/>20-song catalog")]
+        Profiles["User taste profiles<br/>src/main.py PROFILES<br/>genre, mood, energy,<br/>valence, acousticness"]
+    end
+
+    subgraph Engine["Recommendation engine: src/recommender.py"]
+        Load["load_songs()<br/>parse CSV rows,<br/>convert numeric columns"]
+        Score["score_song()<br/>returns score + reasons"]
+        Genre["Genre rule<br/>exact +2.0 / partial +1.0"]
+        Mood["Mood rule<br/>exact +1.5 / same family +0.75<br/>MOOD_FAMILIES"]
+        Numeric["Numeric closeness<br/>energy x1.5, valence x1.0,<br/>acousticness x0.5"]
+        Rank["recommend_songs()<br/>sort by score desc,<br/>tie-break on energy closeness,<br/>keep top k"]
+    end
+
+    subgraph OOP["OOP wrapper: Recommender class"]
+        UP["UserProfile + Song<br/>dataclasses"]
+        Adapter["_profile_to_prefs()<br/>likes_acoustic to target 0.8 / 0.2"]
+        RecAPI["Recommender.recommend()<br/>Recommender.explain_recommendation()"]
+    end
+
+    subgraph Outputs["Outputs"]
+        CLI["CLI report<br/>python -m src.main<br/>ranked top 5 with reasons"]
+        Tests["pytest<br/>tests/test_recommender.py"]
+    end
+
+    CSV --> Load
+    Load -->|"list of song dicts"| Rank
+    Profiles -->|"user_prefs dict"| Rank
+    Rank -->|"each song"| Score
+    Score --> Genre
+    Score --> Mood
+    Score --> Numeric
+    Genre & Mood & Numeric -->|"points + reasons"| Score
+    Score -->|"(score, reasons)"| Rank
+    Rank -->|"top k: song, score, explanation"| CLI
+
+    Tests --> UP
+    UP --> RecAPI
+    RecAPI --> Adapter
+    Adapter -->|"user_prefs dict"| Rank
+    RecAPI -.->|"explain"| Score
+    RecAPI -->|"ranked Song objects"| Tests
