@@ -1,0 +1,93 @@
+[
+  {
+    "id": "activity-study",
+    "title": "Music for studying and focus",
+    "tags": ["study", "studying", "homework", "focus", "focused", "concentrate", "reading", "work", "coding", "exam"],
+    "prefs": {"mood": "focused", "energy": 0.40, "valence": 0.60, "acousticness": 0.80},
+    "text": "For studying, steady low-to-mid energy (about 0.3-0.5) with few lyrics works best. Lofi, ambient, jazz and classical are common picks because they stay in the background without becoming sleepy."
+  },
+  {
+    "id": "activity-workout",
+    "title": "Music for workouts",
+    "tags": ["workout", "gym", "exercise", "run", "running", "lifting", "training", "cardio", "pump"],
+    "prefs": {"mood": "intense", "energy": 0.92, "acousticness": 0.10},
+    "text": "Workout music needs high energy (0.85+) and a strong beat. Rock, metal, EDM and high-tempo pop keep intensity up; acoustic tracks usually feel too soft."
+  },
+  {
+    "id": "activity-party",
+    "title": "Music for parties and dancing",
+    "tags": ["party", "dance", "dancing", "club", "celebrate", "celebration", "friday", "hype"],
+    "prefs": {"mood": "euphoric", "energy": 0.88, "valence": 0.85},
+    "text": "Party music is high energy and high valence (sounds happy). EDM, Latin, pop and hip hop are crowd favorites. Danceability matters more than lyrics."
+  },
+  {
+    "id": "activity-sleep",
+    "title": "Music for sleep and winding down",
+    "tags": ["sleep", "sleeping", "bed", "bedtime", "wind", "unwind", "relax", "relaxing", "calm", "meditate", "meditation"],
+    "prefs": {"mood": "peaceful", "energy": 0.20, "acousticness": 0.90},
+    "text": "For sleep or winding down, very low energy (below 0.3) and highly acoustic sound help. Classical and ambient pieces work well; avoid anything with sudden drops or heavy drums."
+  },
+  {
+    "id": "activity-drive",
+    "title": "Music for driving",
+    "tags": ["drive", "driving", "road", "roadtrip", "car", "night"],
+    "prefs": {"mood": "moody", "energy": 0.70},
+    "text": "Driving music sits around mid-high energy with a steady pulse. Synthwave suits night drives; country and folk suit long daytime road trips."
+  },
+  {
+    "id": "mood-sad",
+    "title": "Sad and reflective listening",
+    "tags": ["sad", "breakup", "heartbreak", "cry", "crying", "lonely", "down", "rainy", "melancholy"],
+    "prefs": {"mood": "sad", "energy": 0.30, "valence": 0.25},
+    "text": "Sad listening favors low valence and low energy. Folk and acoustic songs feel intimate. Some listeners prefer uplifting music instead when sad; the 'tender' mood family (sad, nostalgic, romantic) covers both."
+  },
+  {
+    "id": "mood-happy",
+    "title": "Happy and upbeat listening",
+    "tags": ["happy", "upbeat", "cheerful", "good", "sunny", "morning", "positive", "joyful", "fun"],
+    "prefs": {"mood": "happy", "energy": 0.80, "valence": 0.85},
+    "text": "Happy music has high valence (0.75+) and usually mid-high energy. Pop, indie pop, bluegrass and Latin tracks in the catalog score highest here."
+  },
+  {
+    "id": "mood-romantic",
+    "title": "Romantic listening",
+    "tags": ["romantic", "romance", "date", "love", "dinner", "valentine"],
+    "prefs": {"mood": "romantic", "energy": 0.50, "valence": 0.65},
+    "text": "Romantic music is warm, mid-tempo and mid energy. R&B and jazz are the classic choices for a date night."
+  },
+  {
+    "id": "mood-angry",
+    "title": "Angry and intense listening",
+    "tags": ["angry", "anger", "mad", "rage", "intense", "aggressive", "heavy", "vent"],
+    "prefs": {"mood": "angry", "energy": 0.95, "valence": 0.25},
+    "text": "Angry or intense listening calls for maximum energy and low valence. Metal and hard rock fit; the 'intense' mood family covers intense, angry and moody."
+  },
+  {
+    "id": "genre-lofi",
+    "title": "About lofi",
+    "tags": ["lofi", "lo-fi", "chillhop", "beats"],
+    "prefs": {"genre": "lofi"},
+    "text": "Lofi is relaxed hip-hop-influenced instrumental music with soft drums and warm, slightly fuzzy textures. Often written 'lo-fi'. Tempo usually 70-90 BPM."
+  },
+  {
+    "id": "genre-electronic",
+    "title": "About electronic styles (EDM, synthwave, trip hop, ambient)",
+    "tags": ["edm", "electronic", "synthwave", "synth", "trip", "ambient", "techno", "house", "80s", "retro"],
+    "prefs": {},
+    "text": "EDM is high-energy dance music built around drops. Synthwave uses retro 80s synths and suits night drives. Trip hop is slow, dreamy and moody. Ambient is very calm and textural with little rhythm."
+  },
+  {
+    "id": "genre-acoustic",
+    "title": "About acoustic styles (folk, country, bluegrass, classical)",
+    "tags": ["acoustic", "folk", "country", "bluegrass", "classical", "piano", "guitar", "unplugged", "banjo"],
+    "prefs": {"acousticness": 0.85},
+    "text": "Folk, country, bluegrass and classical are the most acoustic genres in the catalog. Bluegrass is fast and joyful, folk is intimate and often sad, classical is calm and peaceful."
+  },
+  {
+    "id": "system-limits",
+    "title": "Catalog limits",
+    "tags": ["kpop", "k-pop", "spanish", "latin", "new", "popular", "trending", "artist"],
+    "prefs": {},
+    "text": "The VibeMatch catalog has only 20 songs and one or two per genre. It cannot search by artist popularity, release date or lyrics, and genres not in the catalog (like k-pop) fall back to partial matches such as pop."
+  }
+]

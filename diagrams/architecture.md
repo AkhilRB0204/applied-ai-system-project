@@ -1,56 +1,65 @@
 # System Architecture
 
-How VibeMatch turns a song catalog and a user taste profile into ranked, explained recommendations. The Mermaid source is also kept as [`architecture.mmd`](architecture.mmd).
+How VibeMatch 2.0 turns a plain-English request into recommendations grounded in retrieved data. The Mermaid source is also kept as [`architecture.mmd`](architecture.mmd).
 
 ```mermaid
 flowchart TD
-    subgraph Inputs["Inputs"]
+    User(["User request<br/>python -m src.main &quot;chill music for studying&quot;"])
+
+    subgraph Data["Data sources"]
         CSV[("data/songs.csv<br/>20-song catalog")]
-        Profiles["User taste profiles<br/>src/main.py PROFILES<br/>genre, mood, energy,<br/>valence, acousticness"]
+        KB[("data/knowledge_base.json<br/>13 activity / mood / genre notes")]
     end
 
-    subgraph Engine["Recommendation engine: src/recommender.py"]
-        Load["load_songs()<br/>parse CSV rows,<br/>convert numeric columns"]
-        Score["score_song()<br/>returns score + reasons"]
-        Genre["Genre rule<br/>exact +2.0 / partial +1.0"]
-        Mood["Mood rule<br/>exact +1.5 / same family +0.75<br/>MOOD_FAMILIES"]
-        Numeric["Numeric closeness<br/>energy x1.5, valence x1.0,<br/>acousticness x0.5"]
-        Rank["recommend_songs()<br/>sort by score desc,<br/>tie-break on energy closeness,<br/>keep top k"]
+    subgraph App["src/main.py: CLI, logging setup, error handling"]
+        Print["print answer + retrieved data<br/>+ pipeline log"]
     end
 
-    subgraph OOP["OOP wrapper: Recommender class"]
-        UP["UserProfile + Song<br/>dataclasses"]
-        Adapter["_profile_to_prefs()<br/>likes_acoustic to target 0.8 / 0.2"]
-        RecAPI["Recommender.recommend()<br/>Recommender.explain_recommendation()"]
+    subgraph RAG["RAG pipeline: src/rag.py ask()"]
+        Guard["clean_query()<br/>reject empty, cut > 300 chars"]
+        Notes["1. retrieve_notes()<br/>keyword match on note tags"]
+        Prefs["build_prefs()<br/>note targets + genre / mood<br/>named in the request"]
+        Songs["2. recommend_songs()<br/>top 5 candidates"]
+        Gen["3. Claude claude-opus-5-5<br/>writes 3 picks using only<br/>retrieved notes + candidates"]
+        Check{"4. check_answer()<br/>every pick a candidate?"}
+        Retry["send problems back<br/>retry once"]
+        Fallback["fallback_answer()<br/>template from retrieved data"]
     end
 
-    subgraph Outputs["Outputs"]
-        CLI["CLI report<br/>python -m src.main<br/>ranked top 5 with reasons"]
-        Tests["pytest<br/>tests/test_recommender.py"]
+    subgraph Scorer["src/recommender.py (VibeMatch 1.0 scorer)"]
+        Score["score_song()<br/>genre +2.0 / mood +1.5 /<br/>energy, valence, acousticness closeness"]
     end
 
-    CSV --> Load
-    Load -->|"list of song dicts"| Rank
-    Profiles -->|"user_prefs dict"| Rank
-    Rank -->|"each song"| Score
-    Score --> Genre
-    Score --> Mood
-    Score --> Numeric
-    Genre & Mood & Numeric -->|"points + reasons"| Score
-    Score -->|"(score, reasons)"| Rank
-    Rank -->|"top k: song, score, explanation"| CLI
+    Log[("logs/vibematch.log")]
+    Profiles["--profiles demo<br/>8 hand-written profiles"]
+    Tests["pytest: tests/<br/>fake Claude client, offline"]
 
-    Tests --> UP
-    UP --> RecAPI
-    RecAPI --> Adapter
-    Adapter -->|"user_prefs dict"| Rank
-    RecAPI -.->|"explain"| Score
-    RecAPI -->|"ranked Song objects"| Tests
+    User --> Guard --> Notes
+    KB --> Notes
+    Notes --> Prefs --> Songs
+    CSV --> Songs
+    Songs <--> Score
+    Notes -->|"note text"| Gen
+    Songs -->|"candidates + scores + reasons"| Gen
+    Gen --> Check
+    Check -->|"pass"| Print
+    Check -->|"fail, 1st try"| Retry --> Gen
+    Check -->|"fail again"| Fallback
+    Gen -.->|"API error, refusal or no key"| Fallback
+    Fallback --> Print
+    RAG -.->|"every step"| Log
+    Profiles --> Score
+    Tests -.-> RAG
 ```
 
 ## Components
 
-- **Inputs:** `data/songs.csv` (20-song catalog) and the taste profiles in `src/main.py`.
-- **Recommendation engine (`src/recommender.py`):** `load_songs()` parses the catalog; `recommend_songs()` sends each song to `score_song()`, which adds genre, mood-family and numeric-closeness points and records a reason for each; results are sorted by score (ties broken by energy closeness) and the top k are kept.
-- **OOP wrapper:** the `Recommender` class with `Song` and `UserProfile` dataclasses; `_profile_to_prefs()` converts a profile into the same `user_prefs` dict the engine uses.
-- **Outputs:** the CLI report (`python -m src.main`) and the pytest suite (`tests/test_recommender.py`).
+- **Data sources:** `data/songs.csv` (20-song catalog) and `data/knowledge_base.json` (notes about activities, moods and genres, each with text and suggested targets).
+- **CLI (`src/main.py`):** parses arguments, sets up logging to `logs/vibematch.log`, loads data with clear errors, and prints the answer next to the data it came from. `--profiles` runs the original 8-profile demo.
+- **RAG pipeline (`src/rag.py`):**
+  1. `retrieve_notes()` finds notes whose tags match the request.
+  2. `build_prefs()` turns the notes and any genre/mood named in the request into `user_prefs`; `recommend_songs()` retrieves the top 5 candidates.
+  3. Claude writes 3 picks using only the retrieved notes and candidates.
+  4. `check_answer()` rejects picks outside the candidates; Claude gets one retry with the problems listed, then `fallback_answer()` takes over. API errors, refusals and a missing key also use the fallback.
+- **Scorer (`src/recommender.py`):** the VibeMatch 1.0 scoring rules, reused as the song retriever.
+- **Tests:** `tests/` run offline with a fake Claude client.

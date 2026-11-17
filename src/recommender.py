@@ -98,8 +98,12 @@ def score_song(user_prefs: Dict, song: Dict) -> Tuple[float, List[str]]:
     reasons = []
 
     # Genre: full points for an exact match, half for a partial one ("pop" / "indie pop").
-    genre, song_genre = user_prefs["genre"].lower(), song["genre"].lower()
-    if genre == song_genre:
+    # An empty genre or mood (e.g. a free-text request that never named one) earns nothing,
+    # instead of partially matching every song because "" is a substring of everything.
+    genre, song_genre = user_prefs.get("genre", "").lower(), song["genre"].lower()
+    if not genre:
+        pass
+    elif genre == song_genre:
         score += GENRE_WEIGHT
         reasons.append(f"genre match (+{GENRE_WEIGHT:.2f})")
     elif genre in song_genre or song_genre in genre:
@@ -107,8 +111,10 @@ def score_song(user_prefs: Dict, song: Dict) -> Tuple[float, List[str]]:
         reasons.append(f"similar genre: {song['genre']} (+{GENRE_WEIGHT / 2:.2f})")
 
     # Mood: full points for an exact match, half for the same mood family.
-    mood, song_mood = user_prefs["mood"].lower(), song["mood"].lower()
-    if mood == song_mood:
+    mood, song_mood = user_prefs.get("mood", "").lower(), song["mood"].lower()
+    if not mood:
+        pass
+    elif mood == song_mood:
         score += MOOD_WEIGHT
         reasons.append(f"mood match (+{MOOD_WEIGHT:.2f})")
     elif _mood_family(mood) and _mood_family(mood) == _mood_family(song_mood):
@@ -149,6 +155,6 @@ def recommend_songs(user_prefs: Dict, songs: List[Dict], k: int = 5) -> List[Tup
 
     ranked = sorted(
         scored,
-        key=lambda item: (-item[1], abs(item[0]["energy"] - user_prefs["energy"])),
+        key=lambda item: (-item[1], abs(item[0]["energy"] - user_prefs.get("energy", 0.5))),
     )
     return ranked[:k]

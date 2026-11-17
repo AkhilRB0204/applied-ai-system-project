@@ -13,6 +13,8 @@ Your goal is to:
 
 **VibeMatch 1.0** is a small, CLI-first, content-based music recommender. It loads a 20-song catalog from `data/songs.csv`, scores every song against a user's taste profile (genre, mood, energy, and optionally valence and acousticness), and prints the top 5 with a short reason for every point a song earned. I stress-tested it with 8 profiles, including four adversarial ones, ran a weight-shift experiment, and documented the biases I found in [`model_card.md`](model_card.md).
 
+**VibeMatch 2.0** adds Retrieval-Augmented Generation: you can describe what you want in plain English, and Claude writes recommendations grounded in songs and notes retrieved from the project's own data (see [AI Feature](#ai-feature-retrieval-augmented-generation-vibematch-20)).
+
 ## How The System Works
 
 ### How real-world recommenders work, and what mine prioritizes
@@ -69,7 +71,7 @@ The functional version (`score_song` / `recommend_songs`) takes the same informa
 user_prefs = {"genre": "lofi", "mood": "chill", "energy": 0.40, "valence": 0.60, "acousticness": 0.80}
 ```
 
-`src/main.py` runs 8 profiles in total. The default is `{"genre": "pop", "mood": "happy", "energy": 0.8}`.
+`python -m src.main --profiles` runs these 8 profiles. The default is `{"genre": "pop", "mood": "happy", "energy": 0.8}`.
 
 `tempo_bpm` and `danceability` are not scored. In this dataset they track energy very closely, so they would count the same signal again.
 
@@ -142,44 +144,74 @@ For the study profile above:
 
 ---
 
+## AI Feature: Retrieval-Augmented Generation (VibeMatch 2.0)
+
+VibeMatch 2.0 lets you ask for music in plain English, for example `"something sad for a rainy day"`. The request goes through a RAG pipeline (`src/rag.py`), and Claude writes the final answer **from the retrieved data only**:
+
+1. **Retrieve notes.** Keyword search over `data/knowledge_base.json` (13 notes about activities, moods and genres). Each note carries text for Claude *and* suggested targets (e.g. studying → energy 0.40, acousticness 0.80).
+2. **Retrieve songs.** The request + retrieved notes become a `user_prefs` dict, and the original scorer ranks the catalog. The top 5 are the only songs Claude may recommend.
+3. **Generate.** Claude (`claude-opus-5-5`) receives the request, the notes and the 5 candidates with their scores and match reasons, and writes 3 picks grounded in that data.
+4. **Check (guardrail).** Code verifies every pick is a retrieved candidate and no other catalog song is named. On failure the problems are sent back to Claude for one retry; if it still fails, or the API errors, the app falls back to a template answer built from the same retrieved data.
+
+So retrieval changes the answer itself: the notes decide which songs are retrieved, and Claude can only recommend those songs. See [`diagrams/architecture.md`](diagrams/architecture.md).
+
+**Guardrails and logging**
+
+- Empty requests are rejected; requests longer than 300 characters are cut.
+- The request is treated as data in the prompt, and the output check rejects songs outside the retrieved set.
+- API errors, refusals and a missing API key all fall back safely instead of crashing; a request that matches nothing says so.
+- Malformed data files are reported with a clear message.
+- Every step (notes retrieved, prefs built, candidates, each attempt and check result) is written to `logs/vibematch.log`. Add `-v` to also print it on screen.
+
+---
+
 ## Getting Started
+
+### Requirements
+
+- Python 3.11 or newer (tested on 3.13)
+- Optional: an Anthropic API key for Claude-written answers. Without one the app still runs and uses template answers.
 
 ### Setup
 
-1. Create a virtual environment (optional but recommended):
-
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate      # Mac or Linux
-   .venv\Scripts\activate         # Windows
-
-2. Install dependencies
-
 ```bash
+git clone https://github.com/AkhilRB0204/applied-ai-system-project.git
+cd applied-ai-system-project
+
+python3 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+
+python -m pip install --upgrade pip
 pip install -r requirements.txt
+
+export ANTHROPIC_API_KEY=sk-ant-...   # optional; Windows: set ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-3. Run the app:
+Run every command from the project folder (the app reads `data/` with relative paths).
+
+### Run the app
 
 ```bash
-python -m src.main
+python -m src.main "chill lo-fi music for studying late at night"   # one request
+python -m src.main                                                   # interactive, blank line quits
+python -m src.main --offline "music for the gym"                     # skip Claude
+python -m src.main -v "something romantic for dinner"                # show log lines too
+python -m src.main --profiles                                        # original 8-profile demo (VibeMatch 1.0)
 ```
 
 ### Running Tests
-
-Run the starter tests with:
 
 ```bash
 pytest
 ```
 
-You can add more tests in `tests/test_recommender.py`.
+The 14 tests run offline: Claude is replaced by a fake client, so no API key or network is needed. `tests/test_rag.py` covers retrieval, the output check, the retry, the fallbacks and the input guardrails.
 
 ---
 
 ## Sample Recommendation Output
 
-Output of `python -m src.main`. It runs 8 profiles: three "normal" listeners (pop, lofi, rock), the default pop/happy profile, and four **adversarial** profiles designed to trick the scoring logic:
+Output of `python -m src.main --profiles`. It runs 8 profiles: three "normal" listeners (pop, lofi, rock), the default pop/happy profile, and four **adversarial** profiles designed to trick the scoring logic:
 
 | Profile | What it tests |
 |---|---|
