@@ -57,11 +57,12 @@ class RagResult:
     answer: str = ""
     source: str = ""  # "claude", "fallback" or "offline"
     log: List[str] = field(default_factory=list)
+    logger_name: str = "vibematch.rag"
 
     def note(self, message: str, level: int = logging.INFO) -> None:
         """Record a pipeline step for the user and in the log file."""
         self.log.append(message)
-        logger.log(level, "%s | %s", self.query[:60], message)
+        logging.getLogger(self.logger_name).log(level, "%s | %s", self.query[:60], message)
 
 
 # ---------------------------------------------------------------- retrieval

@@ -4,10 +4,13 @@ VibeMatch command-line app.
     python -m src.main "chill music for studying"   # ask in plain English (RAG)
     python -m src.main                              # interactive: keep asking
     python -m src.main --profiles                   # original 8-profile demo
+    python -m src.main --agent "..."                # agentic workflow: Claude plans + uses tools
     python -m src.main --offline "..."              # skip Claude, template answer
 
 Free-text requests go through the RAG pipeline in src/rag.py: retrieve notes
 and candidate songs, have Claude write the answer from them, then check it.
+With --agent, Claude instead plans its own steps, calls retrieval tools
+(src/agent.py) and checks its picks before answering.
 Every run is logged to logs/vibematch.log.
 """
 
@@ -18,11 +21,20 @@ from pathlib import Path
 
 # Works both as `python -m src.main` and `python src/main.py`.
 try:
+    from src.agent import ask_agent
     from src.rag import ask, load_knowledge_base, make_client
     from src.recommender import load_songs, recommend_songs
 except ImportError:
+    from agent import ask_agent
     from rag import ask, load_knowledge_base, make_client
     from recommender import load_songs, recommend_songs
+
+SOURCE_LABELS = {
+    "claude": "written by Claude from retrieved data",
+    "agent": "written by Claude agent after planning, tool use and checks",
+    "offline": "offline template",
+    "fallback": "fallback template",
+}
 
 SONGS_PATH = "data/songs.csv"
 KNOWLEDGE_BASE_PATH = "data/knowledge_base.json"
@@ -89,7 +101,7 @@ def print_rag_result(result) -> None:
     print("=" * 64)
     print(f"Request: {result.query}")
     print("=" * 64)
-    print(f"Answer ({'written by Claude' if result.source == 'claude' else result.source + ' template'}):")
+    print(f"Answer ({SOURCE_LABELS.get(result.source, result.source)}):")
     print(result.answer)
     print("\nBased on retrieved notes:")
     for note in result.notes or [{"title": "(none)"}]:
@@ -124,10 +136,11 @@ def run_profiles(songs: list) -> None:
         print_recommendations(name, user_prefs, recommendations)
 
 
-def run_request(query: str, songs: list, knowledge_base: list, client) -> None:
+def run_request(query: str, songs: list, knowledge_base: list, client, agent: bool = False) -> None:
     """Answer one free-text request; report bad input instead of crashing."""
+    answer_fn = ask_agent if agent else ask
     try:
-        print_rag_result(ask(query, songs, knowledge_base, client))
+        print_rag_result(answer_fn(query, songs, knowledge_base, client))
     except ValueError as error:
         print(f"Sorry: {error}\n")
 
@@ -136,6 +149,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="VibeMatch music recommender")
     parser.add_argument("request", nargs="*", help="what you want to listen to, in plain English")
     parser.add_argument("--profiles", action="store_true", help="run the original 8-profile demo")
+    parser.add_argument("--agent", action="store_true", help="agentic mode: Claude plans, calls tools, checks picks")
     parser.add_argument("--offline", action="store_true", help="do not call Claude; use template answers")
     parser.add_argument("-v", "--verbose", action="store_true", help="print log messages to the screen")
     args = parser.parse_args(argv)
@@ -160,7 +174,7 @@ def main(argv=None) -> int:
         print("Running offline (no ANTHROPIC_API_KEY or --offline): answers are templates built from retrieved data.\n")
 
     if args.request:
-        run_request(" ".join(args.request), songs, knowledge_base, client)
+        run_request(" ".join(args.request), songs, knowledge_base, client, args.agent)
         return 0
 
     while True:
@@ -171,7 +185,7 @@ def main(argv=None) -> int:
             break
         if not query:
             break
-        run_request(query, songs, knowledge_base, client)
+        run_request(query, songs, knowledge_base, client, args.agent)
     return 0
 
 

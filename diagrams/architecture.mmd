@@ -16,17 +16,26 @@ flowchart LR
         Fallback["Fallback<br/>template answer"]
     end
 
+    subgraph Agent["Agent mode --agent: src/agent.py"]
+        Plan["Plan<br/>reason on every tool call"]
+        Tools["Act: Claude calls tools<br/>search_notes / find_songs<br/>(retries with new targets)"]
+        SelfCheck["Check: check_picks<br/>then fix picks"]
+    end
+
     subgraph Output
         Answer["Answer + the notes and songs<br/>it was based on"]
         Log[("logs/vibematch.log<br/>every step + check result")]
     end
 
     subgraph Checks["Checking AI results"]
-        Tests["Tester: pytest<br/>14 offline tests, fake Claude"]
+        Tests["Tester: pytest<br/>23 offline tests, fake Claude"]
         Human["Human review<br/>user compares answer to sources;<br/>developer reads the log and<br/>--profiles adversarial demo"]
     end
 
     Req --> Guard --> Retriever
+    Guard -->|"--agent"| Plan --> Tools --> SelfCheck
+    Tools <-.->|"same retrieval code"| Retriever
+    SelfCheck -->|"final answer"| Evaluator
     KB --> Retriever
     CSV --> Retriever
     Retriever --> Generator --> Evaluator
@@ -34,7 +43,9 @@ flowchart LR
     Evaluator -->|"fail: retry once"| Generator
     Evaluator -->|"fail again / API error / no key"| Fallback --> Answer
     Process -.-> Log
+    Agent -.->|"steps + plans"| Log
 
     Tests -.->|"verify retriever, evaluator,<br/>retry, fallback, guardrails"| Process
+    Tests -.->|"verify loop, step limit,<br/>tool input checks"| Agent
     Answer -.-> Human
     Log -.-> Human

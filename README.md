@@ -13,7 +13,7 @@ Your goal is to:
 
 **VibeMatch 1.0** is a small, CLI-first, content-based music recommender. It loads a 20-song catalog from `data/songs.csv`, scores every song against a user's taste profile (genre, mood, energy, and optionally valence and acousticness), and prints the top 5 with a short reason for every point a song earned. I stress-tested it with 8 profiles, including four adversarial ones, ran a weight-shift experiment, and documented the biases I found in [`model_card.md`](model_card.md).
 
-**VibeMatch 2.0** adds Retrieval-Augmented Generation: you can describe what you want in plain English, and Claude writes recommendations grounded in songs and notes retrieved from the project's own data (see [AI Feature](#ai-feature-retrieval-augmented-generation-vibematch-20)).
+**VibeMatch 2.0** adds Retrieval-Augmented Generation: you can describe what you want in plain English, and Claude writes recommendations grounded in songs and notes retrieved from the project's own data (see [AI Feature](#ai-feature-retrieval-augmented-generation-vibematch-20)). With `--agent`, Claude instead plans its own steps, calls retrieval tools and checks its picks before answering (see [Agentic Workflow](#ai-feature-agentic-workflow---agent)).
 
 ## How The System Works
 
@@ -155,6 +155,30 @@ VibeMatch 2.0 lets you ask for music in plain English, for example `"something s
 
 So retrieval changes the answer itself: the notes decide which songs are retrieved, and Claude can only recommend those songs. See [`diagrams/architecture.md`](diagrams/architecture.md).
 
+## AI Feature: Agentic Workflow (`--agent`)
+
+With `--agent`, Claude runs the retrieval itself instead of following the fixed pipeline (`src/agent.py`). It works in three phases:
+
+1. **Plan.** Every tool call includes a `reason`: Claude's plan for that step, which is logged.
+2. **Act.** Claude chooses which tools to call and with what arguments:
+   - `search_notes(query)` searches the knowledge base.
+   - `find_songs(genre, mood, energy, valence, acousticness, k)` ranks the catalog with targets Claude picks. Claude can call it again with adjusted targets if the first results are weak.
+3. **Check.** Claude calls `check_picks(titles)` to confirm its picks were really returned by `find_songs`, and fixes problems before answering. The code then runs `check_answer()` on the final answer independently; a failed answer is sent back once for correction.
+
+Agent guardrails: at most 8 model calls per request, every tool input is validated (bad values are returned to Claude as tool errors), unknown tools are rejected, and if the agent hits the limit, errors, is refused or never produces a checked answer, the app falls back to the template answer. Without an API key, `--agent` runs the offline RAG pipeline and says so.
+
+Example log for `python -m src.main --agent "lofi for studying"`:
+
+```
+Step 1: search_notes(query='studying') | plan: Learn what suits studying.
+Step 2: find_songs(genre='lofi', mood='chill', energy=0.4) | plan: Use study targets.
+Step 3: check_picks(titles=[...]) | plan: Verify before answering.
+Step 3: check_picks -> {"ok": true, "problems": []}
+Step 4: final answer passed check_answer()
+```
+
+(Illustrative; the exact steps depend on what Claude decides.)
+
 **Guardrails and logging**
 
 - Empty requests are rejected; requests longer than 300 characters are cut.
@@ -194,6 +218,7 @@ Run every command from the project folder (the app reads `data/` with relative p
 ```bash
 python -m src.main "chill lo-fi music for studying late at night"   # one request
 python -m src.main                                                   # interactive, blank line quits
+python -m src.main --agent "something sad for a rainy day"           # agentic workflow (needs API key)
 python -m src.main --offline "music for the gym"                     # skip Claude
 python -m src.main -v "something romantic for dinner"                # show log lines too
 python -m src.main --profiles                                        # original 8-profile demo (VibeMatch 1.0)
@@ -205,7 +230,7 @@ python -m src.main --profiles                                        # original 
 pytest
 ```
 
-The 14 tests run offline: Claude is replaced by a fake client, so no API key or network is needed. `tests/test_rag.py` covers retrieval, the output check, the retry, the fallbacks and the input guardrails.
+The 23 tests run offline: Claude is replaced by a scripted fake client, so no API key or network is needed. `tests/test_rag.py` covers retrieval, the output check, the retry, the fallbacks and the input guardrails. `tests/test_agent.py` covers the agent's plan/act/check loop, the correction round, the step limit, invalid tool inputs and the fallbacks.
 
 ---
 
