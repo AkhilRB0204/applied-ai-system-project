@@ -224,13 +224,26 @@ python -m src.main -v "something romantic for dinner"                # show log 
 python -m src.main --profiles                                        # original 8-profile demo (VibeMatch 1.0)
 ```
 
+### Run the web page
+
+```bash
+streamlit run app.py
+```
+
+This opens `http://localhost:8501` in your browser (a page on your own computer, not a public site). It has three tabs:
+- **Ask:** type a request, pick **RAG** or **Agent** mode in the sidebar, and see the answer next to the retrieved notes, the targets used, the retrieved songs and the pipeline log.
+- **Profile demo:** the original VibeMatch 1.0 scorer on the 8 hand-written profiles.
+- **Catalog:** the 20-song catalog.
+
+You can paste an API key into the sidebar (used for that session only, never saved) or rely on `ANTHROPIC_API_KEY`. Stop the server with `Ctrl+C`.
+
 ### Running Tests
 
 ```bash
 pytest
 ```
 
-The 23 tests run offline: Claude is replaced by a scripted fake client, so no API key or network is needed. `tests/test_rag.py` covers retrieval, the output check, the retry, the fallbacks and the input guardrails. `tests/test_agent.py` covers the agent's plan/act/check loop, the correction round, the step limit, invalid tool inputs and the fallbacks.
+The 25 tests run offline: Claude is replaced by a scripted fake client, so no API key or network is needed. `tests/test_app.py` loads the Streamlit page with Streamlit's `AppTest` and submits a request in offline mode. `tests/test_rag.py` covers retrieval, the output check, the retry, the fallbacks and the input guardrails. `tests/test_agent.py` covers the agent's plan/act/check loop, the correction round, the step limit, invalid tool inputs and the fallbacks.
 
 ---
 

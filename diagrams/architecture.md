@@ -30,7 +30,7 @@ flowchart LR
     end
 
     subgraph Checks["Checking AI results"]
-        Tests["Tester: pytest<br/>23 offline tests, fake Claude"]
+        Tests["Tester: pytest<br/>25 offline tests, fake Claude"]
         Human["Human review<br/>user compares answer to sources;<br/>developer reads the log and<br/>--profiles adversarial demo"]
     end
 
@@ -69,5 +69,5 @@ flowchart LR
 ## Where results are checked
 
 - **Automatically, every request:** the evaluator checks Claude's answer before it is shown. In agent mode Claude also checks its own picks with `check_picks` first.
-- **Tests:** `pytest` runs 23 offline tests (scripted fake Claude client) covering the retriever, evaluator, retry, fallbacks, guardrails, and the agent's loop, step limit and tool-input validation.
+- **Tests:** `pytest` runs 25 offline tests (scripted fake Claude client) covering the retriever, evaluator, retry, fallbacks, guardrails, and the agent's loop, step limit and tool-input validation.
 - **Humans:** the user sees the answer next to the notes and songs it came from, so unsupported claims are easy to spot; the developer reviews `logs/vibematch.log` and the adversarial profiles in `python -m src.main --profiles` (findings in `model_card.md`).
