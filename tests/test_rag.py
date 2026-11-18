@@ -28,6 +28,11 @@ def test_retrieve_notes_finds_study_note():
     assert notes[0]["id"] == "activity-study"
 
 
+def test_work_out_is_not_read_as_study_work():
+    notes = retrieve_notes("songs to work out at the gym", KB)
+    assert [n["id"] for n in notes] == ["activity-workout"]
+
+
 def test_build_prefs_uses_notes_and_explicit_genre():
     query = "lofi for studying"
     prefs = build_prefs(query, retrieve_notes(query, KB), SONGS)

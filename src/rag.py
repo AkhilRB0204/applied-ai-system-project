@@ -96,7 +96,9 @@ def clean_query(query: str) -> str:
 
 def _tokens(text: str) -> List[str]:
     """Lowercase words, keeping hyphens and ampersands (lo-fi, r&b)."""
-    return re.findall(r"[a-z0-9&]+(?:-[a-z0-9]+)*", text.lower())
+    # "work out" must not match the study note's "work" tag (found by src/evaluate.py).
+    text = re.sub(r"\bwork(?:ing)?[\s-]+out\b", "workout", text.lower())
+    return re.findall(r"[a-z0-9&]+(?:-[a-z0-9]+)*", text)
 
 
 def retrieve_notes(query: str, knowledge_base: List[Dict], k: int = 3) -> List[Dict]:
