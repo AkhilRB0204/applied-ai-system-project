@@ -1,21 +1,85 @@
-# 🎵 Music Recommender Simulation
+# 🎵 VibeMatch 2.0
 
-## Project Summary
+> A music recommender that turns plain-English requests into song picks grounded in its own data, using RAG and an agent that plans, searches and checks its answers.
 
-In this project you will build and explain a small music recommender system.
+## Original Project
 
-Your goal is to:
+**Original project:** VibeMatch 1.0, the Module 3 Music Recommender Simulation. Its code is the earlier history of this repo: [AkhilRB0204/applied-ai-system-project](https://github.com/AkhilRB0204/applied-ai-system-project).
 
-- Represent songs and a user "taste profile" as data
-- Design a scoring rule that turns that data into recommendations
-- Evaluate what your system gets right and wrong
-- Reflect on how this mirrors real world AI recommenders
+VibeMatch 1.0 is a small, CLI-first, content-based music recommender. It loads a 20-song catalog from `data/songs.csv`, scores every song against a user's taste profile (genre, mood, energy, and optionally valence and acousticness), and prints the top 5 with a short reason for every point a song earned. I stress-tested it with 8 profiles, including four adversarial ones, ran a weight-shift experiment, and documented the biases I found in [`model_card.md`](model_card.md).
 
-**VibeMatch 1.0** is a small, CLI-first, content-based music recommender. It loads a 20-song catalog from `data/songs.csv`, scores every song against a user's taste profile (genre, mood, energy, and optionally valence and acousticness), and prints the top 5 with a short reason for every point a song earned. I stress-tested it with 8 profiles, including four adversarial ones, ran a weight-shift experiment, and documented the biases I found in [`model_card.md`](model_card.md).
+## Summary
 
-**VibeMatch 2.0** adds Retrieval-Augmented Generation: you can describe what you want in plain English, and Claude writes recommendations grounded in songs and notes retrieved from the project's own data (see [AI Feature](#ai-feature-retrieval-augmented-generation-vibematch-20)). With `--agent`, Claude instead plans its own steps, calls retrieval tools and checks its picks before answering (see [Agentic Workflow](#ai-feature-agentic-workflow---agent)).
+VibeMatch 2.0 adds **Retrieval-Augmented Generation**: you describe what you want in plain English, and an AI model (Claude, or a free local model through Ollama) writes recommendations grounded in songs and notes retrieved from the project's own data (see [AI Feature](#ai-feature-retrieval-augmented-generation-vibematch-20)). It also adds an **agentic workflow**: with `--agent`, the model turns a vague request into good search settings itself, calls retrieval tools, and checks its picks before answering, instead of relying on fixed keyword rules (see [Agentic Workflow](#ai-feature-agentic-workflow---agent)).
 
-## How The System Works
+This matters because a plain recommender needs exact labels like `genre=lofi`, while people actually ask for things like "something for a rainy day." VibeMatch 2.0 accepts natural requests but never invents songs: every pick is checked against what was retrieved, and if the AI fails, the app still answers from the data.
+
+## Architecture Overview
+
+```mermaid
+flowchart LR
+    subgraph Input
+        Req(["User request<br/>e.g. chill music for studying"])
+        KB[("Knowledge base<br/>data/knowledge_base.json")]
+        CSV[("Song catalog<br/>data/songs.csv")]
+    end
+
+    subgraph Process["Process: src/rag.py"]
+        Guard["Input guardrail<br/>clean_query()"]
+        Retriever["Retriever<br/>retrieve_notes() + recommend_songs()<br/>top 5 candidate songs"]
+        Generator["Generator: AI model<br/>(Claude or local Ollama)<br/>writes 3 picks from<br/>retrieved data only"]
+        Evaluator{"Evaluator<br/>check_answer():<br/>all picks retrieved?"}
+        Fallback["Fallback<br/>template answer"]
+    end
+
+    subgraph Agent["Agent mode --agent: src/agent.py"]
+        Plan["Plan<br/>reason on every tool call"]
+        Tools["Act: model calls tools<br/>search_notes / find_songs<br/>(retries with new targets)"]
+        SelfCheck["Check: check_picks<br/>then fix picks"]
+    end
+
+    subgraph Output
+        Answer["Answer + the notes and songs<br/>it was based on"]
+        Log[("logs/vibematch.log<br/>every step + check result")]
+    end
+
+    subgraph Checks["Checking AI results"]
+        Tests["Tester: pytest<br/>37 offline tests, fake model"]
+        Human["Human review<br/>user compares answer to sources;<br/>developer reads the log and<br/>--profiles adversarial demo"]
+    end
+
+    Req --> Guard --> Retriever
+    Guard -->|"--agent"| Plan --> Tools --> SelfCheck
+    Tools <-.->|"same retrieval code"| Retriever
+    SelfCheck -->|"final answer"| Evaluator
+    KB --> Retriever
+    CSV --> Retriever
+    Retriever --> Generator --> Evaluator
+    Evaluator -->|"pass"| Answer
+    Evaluator -->|"fail: retry once"| Generator
+    Evaluator -->|"fail again / API error / no key"| Fallback --> Answer
+    Process -.-> Log
+    Agent -.->|"steps + plans"| Log
+
+    Tests -.->|"verify retriever, evaluator,<br/>retry, fallback, guardrails"| Process
+    Tests -.->|"verify loop, step limit,<br/>tool input checks"| Agent
+    Answer -.-> Human
+    Log -.-> Human
+```
+
+Mermaid source: [`diagrams/architecture.mmd`](diagrams/architecture.mmd) · Component table: [`diagrams/architecture.md`](diagrams/architecture.md)
+
+- **Input:** A plain-English music request typed into the Streamlit app or the command line, e.g. "chill music for studying."
+- **Process:** First, a guardrail rejects empty requests and cuts anything over 300 characters. The retriever pulls the most relevant notes from `data/knowledge_base.json` and uses them, plus the request, to rank the songs in `data/songs.csv`. The AI model writes 3 picks using only the retrieved notes and songs. An evaluator (`check_answer`) rejects any pick that wasn't retrieved, any other catalog song named in the answer, a wrong format, or an answer over 160 words. If the answer fails, the model gets one chance to fix it. In **agent mode** (a separate mode, chosen with `--agent` or the Agent option in the app), the model instead plans each step and calls tools to search the notes, find songs and check its picks with `check_picks` before answering, with a limit of 8 steps. If the model fails, the API returns an error, or no model is available, the system falls back to a template answer built from the same retrieved data.
+- **Output:** Up to 3 recommendations in the format `"Song Title" by Artist: reason`, sometimes followed by a one-sentence note when the catalog is a weak fit. The app also shows which path produced the answer (AI model, agent, fallback or offline), the retrieved notes, the target features it used, the retrieved songs with scores, and a step-by-step pipeline log, which is also saved to `logs/vibematch.log`.
+- **Where humans / testing check the AI:**
+  - **Automated:** `check_answer` checks every answer, and `check_picks` checks the agent's picks before the final answer.
+  - **Tests:** 37 pytest tests cover retrieval, the guardrails, self-correction, the fallback, the agent's step limit, rejection of bad tool input, and API key setup. They run offline with a fake model.
+  - **Human:** A person can compare each answer against the retrieved notes and songs shown on the page, and review the pipeline log or `logs/vibematch.log` to see every step, rejection and fallback.
+
+---
+
+## How the Scorer Works (VibeMatch 1.0)
 
 ### How real-world recommenders work, and what mine prioritizes
 
@@ -143,29 +207,28 @@ For the study profile above:
 - **Context and lyrics are invisible.** The system can't tell *why* someone is listening (studying vs. relaxing) or what a song is about. A song with sad lyrics over a happy-sounding track still scores as happy.
 
 ---
-
 ## AI Feature: Retrieval-Augmented Generation (VibeMatch 2.0)
 
-VibeMatch 2.0 lets you ask for music in plain English, for example `"something sad for a rainy day"`. The request goes through a RAG pipeline (`src/rag.py`), and Claude writes the final answer **from the retrieved data only**:
+VibeMatch 2.0 lets you ask for music in plain English, for example `"something sad for a rainy day"`. The request goes through a RAG pipeline (`src/rag.py`), and the AI model writes the final answer **from the retrieved data only**:
 
-1. **Retrieve notes.** Keyword search over `data/knowledge_base.json` (13 notes about activities, moods and genres). Each note carries text for Claude *and* suggested targets (e.g. studying → energy 0.40, acousticness 0.80).
-2. **Retrieve songs.** The request + retrieved notes become a `user_prefs` dict, and the original scorer ranks the catalog. The top 5 are the only songs Claude may recommend.
-3. **Generate.** Claude (`claude-opus-5-5`) receives the request, the notes and the 5 candidates with their scores and match reasons, and writes 3 picks grounded in that data.
-4. **Check (guardrail).** Code verifies every pick is a retrieved candidate and no other catalog song is named. On failure the problems are sent back to Claude for one retry; if it still fails, or the API errors, the app falls back to a template answer built from the same retrieved data.
+1. **Retrieve notes.** Keyword search over `data/knowledge_base.json` (13 notes about activities, moods and genres). Each note carries text for the model *and* suggested targets (e.g. studying → energy 0.40, acousticness 0.80).
+2. **Retrieve songs.** The request + retrieved notes become a `user_prefs` dict, and the original scorer ranks the catalog. The top 5 are the only songs the model may recommend.
+3. **Generate.** The AI model (Claude `claude-opus-5-5`, or the free local `qwen3:4b-instruct` via Ollama) receives the request, the notes and the 5 candidates with their scores and match reasons, and writes 3 picks grounded in that data.
+4. **Check (guardrail).** Code verifies every pick is a retrieved candidate and no other catalog song is named. On failure the problems are sent back to the model for one retry; if it still fails, or the API errors, the app falls back to a template answer built from the same retrieved data.
 
-So retrieval changes the answer itself: the notes decide which songs are retrieved, and Claude can only recommend those songs. See [`diagrams/architecture.md`](diagrams/architecture.md).
+So retrieval changes the answer itself: the notes decide which songs are retrieved, and the model can only recommend those songs. See [`diagrams/architecture.md`](diagrams/architecture.md).
 
 ## AI Feature: Agentic Workflow (`--agent`)
 
-With `--agent`, Claude runs the retrieval itself instead of following the fixed pipeline (`src/agent.py`). It works in three phases:
+With `--agent`, the model runs the retrieval itself instead of following the fixed pipeline (`src/agent.py`). It works in three phases:
 
-1. **Plan.** Every tool call includes a `reason`: Claude's plan for that step, which is logged.
-2. **Act.** Claude chooses which tools to call and with what arguments:
+1. **Plan.** Every tool call includes a `reason`: the model's plan for that step, which is logged.
+2. **Act.** The model chooses which tools to call and with what arguments:
    - `search_notes(query)` searches the knowledge base.
-   - `find_songs(genre, mood, energy, valence, acousticness, k)` ranks the catalog with targets Claude picks. Claude can call it again with adjusted targets if the first results are weak.
-3. **Check.** Claude calls `check_picks(titles)` to confirm its picks were really returned by `find_songs`, and fixes problems before answering. The code then runs `check_answer()` on the final answer independently; a failed answer is sent back once for correction.
+   - `find_songs(genre, mood, energy, valence, acousticness, k)` ranks the catalog with targets the model picks. The model can call it again with adjusted targets if the first results are weak.
+3. **Check.** The model calls `check_picks(titles)` to confirm its picks were really returned by `find_songs`, and fixes problems before answering. The code then runs `check_answer()` on the final answer independently; a failed answer is sent back once for correction.
 
-Agent guardrails: at most 8 model calls per request, every tool input is validated (bad values are returned to Claude as tool errors), unknown tools are rejected, and if the agent hits the limit, errors, is refused or never produces a checked answer, the app falls back to the template answer. Without an API key, `--agent` runs the offline RAG pipeline and says so.
+Agent guardrails: at most 8 model calls per request, every tool input is validated (bad values are returned to the model as tool errors), unknown tools are rejected, and if the agent hits the limit, errors, is refused or never produces a checked answer, the app falls back to the template answer. With no AI model available (no API key and Ollama not running), `--agent` runs the offline RAG pipeline and says so.
 
 Example log for `python -m src.main --agent "lofi for studying"`:
 
@@ -177,7 +240,7 @@ Step 3: check_picks -> {"ok": true, "problems": []}
 Step 4: final answer passed check_answer()
 ```
 
-(Illustrative; the exact steps depend on what Claude decides.)
+(Illustrative; the exact steps depend on what the model decides.)
 
 **Guardrails and logging**
 
@@ -188,79 +251,165 @@ Step 4: final answer passed check_answer()
 - Every step (notes retrieved, prefs built, candidates, each attempt and check result) is written to `logs/vibematch.log`. Add `-v` to also print it on screen.
 
 ---
-
-## Getting Started
+## Setup Instructions
 
 ### Requirements
 
-- Python 3.11 or newer (tested on 3.13)
-- Optional: an Anthropic API key for Claude-written answers. Without one the app still runs and uses template answers.
-
-### Setup
-
-```bash
-git clone https://github.com/AkhilRB0204/applied-ai-system-project.git
-cd applied-ai-system-project
-
-python3 -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-
-cp .env.example .env                 # Windows: copy .env.example .env
-```
-
-### Add your API key (once)
-
-1. Create a key at https://platform.claude.com → **API Keys** (a claude.ai login or subscription does not work; new accounts may need credits under **Billing**).
-2. Open `.env` and paste the whole key after the `=`:
-
-   ```
-   ANTHROPIC_API_KEY=sk-ant-api03-...
-   ```
-
-Both the command line and the web page load `.env` automatically, so you never need to `export` the key or paste it again. `.env` is in `.gitignore`, so the key is never committed. A key exported in your shell takes priority over `.env`.
-
-On startup the app checks the key with a free request (listing models, no tokens used). If the key is wrong, the command line stops with a clear message and the web page shows it in red in the sidebar, instead of silently falling back to template answers. Skip the key entirely, or use `--offline`, to run with template answers.
+- Python 3.11 or newer (tested on 3.13.7)
+- Optional: [Ollama](https://ollama.com) for a free local AI model, or an Anthropic API key to use Claude. Without either, the app still runs and gives template answers built from retrieved data.
 
 Run every command from the project folder (the app reads `data/` with relative paths).
 
-### Run the app
+### Steps
 
-```bash
-python -m src.main "chill lo-fi music for studying late at night"   # one request
-python -m src.main                                                   # interactive, blank line quits
-python -m src.main --agent "something sad for a rainy day"           # agentic workflow (needs API key)
-python -m src.main --offline "music for the gym"                     # skip Claude
-python -m src.main -v "something romantic for dinner"                # show log lines too
-python -m src.main --profiles                                        # original 8-profile demo (VibeMatch 1.0)
-```
+1. Clone the repo
 
-### Run the web page
+   ```bash
+   git clone https://github.com/AkhilRB0204/applied-ai-system-project.git
+   cd applied-ai-system-project
+   ```
 
-```bash
-streamlit run app.py
-```
+2. Create and activate a virtual environment
 
-This opens `http://localhost:8501` in your browser (a page on your own computer, not a public site). It has three tabs:
-- **Ask:** type a request, pick **RAG** or **Agent** mode in the sidebar, and see the answer next to the retrieved notes, the targets used, the retrieved songs and the pipeline log.
-- **Profile demo:** the original VibeMatch 1.0 scorer on the 8 hand-written profiles.
-- **Catalog:** the 20-song catalog.
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate          # Windows: .venv\Scripts\activate
+   ```
 
-You can paste an API key into the sidebar (used for that session only, never saved) or rely on `ANTHROPIC_API_KEY`. Stop the server with `Ctrl+C`.
+3. Install dependencies
 
-### Running Tests
+   ```bash
+   python -m pip install --upgrade pip
+   pip install -r requirements.txt
+   ```
 
-```bash
-pytest
-```
+4. Set up the AI model / configuration (pick one, or skip for template answers)
 
-The 25 tests run offline: Claude is replaced by a scripted fake client, so no API key or network is needed. `tests/test_app.py` loads the Streamlit page with Streamlit's `AppTest` and submits a request in offline mode. `tests/test_rag.py` covers retrieval, the output check, the retry, the fallbacks and the input guardrails. `tests/test_agent.py` covers the agent's plan/act/check loop, the correction round, the step limit, invalid tool inputs and the fallbacks.
+   ```bash
+   cp .env.example .env               # Windows: copy .env.example .env
+
+   # Option A, free local model: install Ollama from https://ollama.com, then
+   ollama pull qwen3:4b-instruct
+
+   # Option B, Claude: open .env and paste your whole key after the = sign
+   # ANTHROPIC_API_KEY=sk-ant-api03-...
+   ```
+
+   - Create a Claude key at https://platform.claude.com → **API Keys** (a claude.ai login or subscription does not work; new accounts may need credits under **Billing**).
+   - Both the command line and the web page load `.env` automatically, so you never need to `export` the key. `.env` is in `.gitignore`, so the key is never committed. A key exported in your shell takes priority over `.env`.
+   - With a key set, Claude is used; otherwise the app uses Ollama if it is running. To force one, set `VIBEMATCH_PROVIDER` in `.env` to `ollama`, `claude` or `offline` (default `auto`).
+   - On startup the app checks the key with a free request (listing models, no tokens used). If the key is wrong, the command line stops with a clear message and the web page shows it in red in the sidebar, instead of silently falling back to template answers.
+
+5. Run the app
+
+   ```bash
+   streamlit run app.py                                                 # web page
+   python -m src.main "chill lo-fi music for studying late at night"   # one request (RAG)
+   python -m src.main                                                   # interactive, blank line quits
+   python -m src.main --agent "something sad for a rainy day"           # agentic workflow (needs Ollama or an API key)
+   python -m src.main --offline "music for the gym"                     # no AI model, template answer
+   python -m src.main -v "something romantic for dinner"                # show log lines too
+   python -m src.main --profiles                                        # original 8-profile demo (VibeMatch 1.0)
+   ```
+
+   `streamlit run app.py` opens `http://localhost:8501` (a page on your own computer, not a public site). It has three tabs:
+   - **Ask:** type a request, pick **RAG** or **Agent** mode and the AI model in the sidebar, and see the answer next to the retrieved notes, the targets used, the retrieved songs and the pipeline log.
+   - **Profile demo:** the original VibeMatch 1.0 scorer on the 8 hand-written profiles.
+   - **Catalog:** the 20-song catalog.
+
+   You can paste an API key into the sidebar (used for that session only, never saved). Stop the server with `Ctrl+C`.
+
+6. Run the tests
+
+   ```bash
+   python -m pytest
+   ```
+
+   The 37 tests run offline: the AI model is replaced by a scripted fake client, so no API key, Ollama or network is needed. `tests/test_rag.py` covers retrieval, the output check, the retry, the fallbacks and the input guardrails. `tests/test_agent.py` covers the agent's plan/act/check loop, the correction round, the step limit, invalid tool inputs and the fallbacks. `tests/test_config.py` covers `.env` loading, provider selection and API key errors. `tests/test_app.py` loads the Streamlit page with Streamlit's `AppTest` and submits requests in offline mode. `tests/test_recommender.py` covers the original scorer.
 
 ---
 
-## Sample Recommendation Output
+## Sample Interactions
+
+These are real, unedited outputs. Examples 1 and 2 were written by the free local model (`qwen3:4b-instruct` via Ollama); Example 3 ran offline.
+
+### Example 1: RAG answer for a study request
+
+**Input:**
+
+```
+chill music for studying
+```
+
+**AI output:**
+
+```
+- "Library Rain" by Paper Lanterns: Perfect lofi chill with steady energy (0.35) and smooth acousticness (0.86), ideal for background focus.
+- "Midnight Coding" by LoRoom: Balanced lofi energy (0.42) and calm mood, offering a consistent, non-sleepy study vibe.
+- "Spacewalk Thoughts" by Orbit Bloom: Ambient chill with low energy (0.28) and high acousticness (0.92), gently supports focus without distraction.
+
+Overall, the candidates are a solid fit, though energy slightly dips in two—still within acceptable range for studying.
+
+Pipeline log:
+  * Retrieved 1 note(s): activity-study
+  * Built prefs: {'mood': 'chill', 'energy': 0.4, 'valence': 0.6, 'acousticness': 0.8, 'genre': ''}
+  * Retrieved 5 candidate song(s): Library Rain (4.29), Midnight Coding (4.27), Spacewalk Thoughts (3.92), Focus Flow (3.71), Coffee Shop Stories (3.35)
+  * Generating with qwen3:4b-instruct (free local model via Ollama)
+  * Attempt 1: check passed
+```
+
+The retriever found the "Music for studying and focus" note and used it to set the targets (chill mood, energy 0.4, acousticness 0.8). The model picked only from the 5 retrieved songs, and the answer passed the check on the first attempt.
+
+### Example 2: Agent mode plans, uses tools and checks its picks
+
+**Input:**
+
+```
+python -m src.main --agent "something sad for a rainy day"
+```
+
+**AI output:**
+
+```
+- "Ashes in Winter" by Hollow Pines: A folk song with low energy and valence, perfectly capturing a sad, introspective rainy day vibe.
+- "Moonlit Sonata No. 2" by Elise Hartmann: A classical piece with gentle energy and melancholic tones, ideal for quiet rainy evenings.
+- "Spacewalk Thoughts" by Orbit Bloom: An ambient track with a chill, reflective mood and subtle sadness, matching the rainy day atmosphere.
+
+The catalog leans toward melancholic, acoustic styles, making it a strong fit for sad rainy day listening.
+
+Pipeline log:
+  * Agent running on qwen3:4b-instruct (free local model via Ollama)
+  * Step 1: search_notes(query='sad rainy day music') | plan: Find mood and genre targets for sad rainy day music
+  * Step 2: find_songs(mood='sad', energy=0.3, valence=0.25, acousticness=1, k=5) | plan: Find sad songs with low energy and valence, focusing on acoustic styles for intimacy
+  * Step 3: check_picks(titles=['Ashes in Winter', 'Moonlit Sonata No. 2', 'Spacewalk Thoughts']) | plan: Verify these top picks match the sad, rainy day criteria before finalizing
+  * Step 3: check_picks -> {"ok": true, "problems": []}
+  * Step 4: final answer passed check_answer()
+```
+
+The agent chose its own search targets from the notes and verified its picks with `check_picks` before answering. The final answer then passed `check_answer`.
+
+### Example 3: A request the system can't match
+
+**Input:**
+
+```
+python -m src.main --offline "polka for my grandma's birthday"
+```
+
+**AI output:**
+
+```
+I couldn't match that request to a genre, mood or activity I know. Try words like 'studying', 'gym', 'sad' or a genre such as 'lofi'. Some songs to start with:
+- "Velvet Hours" by Amara Lane: closest overall match.
+- "Dusty Backroads" by Clay Whitaker: closest overall match.
+- "Midnight Coding" by LoRoom: closest overall match.
+```
+
+No notes matched and every song scored 0.00. Instead of pretending it found a good fit, the system says it couldn't match the request and suggests words that work.
+
+---
+
+## Profile Demo Output (VibeMatch 1.0)
 
 Output of `python -m src.main --profiles`. It runs 8 profiles: three "normal" listeners (pop, lofi, rock), the default pop/happy profile, and four **adversarial** profiles designed to trick the scoring logic:
 
@@ -519,7 +668,18 @@ Profile: Adversarial: Angry Classical
 
 For pop/happy, the results match what I'd expect. Sunrise City is the only song that matches both genre and mood, so it comes first. Rooftop Lights (indie pop) earns partial genre credit, and Gym Hero matches the genre but has the wrong mood, so it ranks third. See `model_card.md` (Evaluation) for what each profile shows.
 
-**Screenshot or video** *(optional)*: <!-- Insert a screenshot or demo video link here -->
+
+---
+
+## Design Decisions
+
+| Decision | Why | Trade-off |
+|---|---|---|
+| Keyword retrieval over a small hand-written knowledge base (`knowledge_base.json`) instead of embeddings | Easy to read and test, needs no extra libraries, and you can see exactly why a note was retrieved | Misses synonyms and unfamiliar words. "Polka" matched nothing (Example 3). |
+| Code checks every answer (`check_answer`), allows one correction round, then falls back to a template | The model can't recommend a song that wasn't retrieved, and the user always gets an answer | It checks titles and format, not whether the reasons are true. A correction round costs an extra model call. |
+| Model choice: Claude if an API key is set, otherwise a free local model (Ollama), otherwise an offline template | Anyone can run the project for free, and tests run offline with no key | A small local model writes looser reasons, and answer quality depends on which model is used. |
+| Agent mode with an 8-step limit and validated tool inputs | Lets the model plan its own search while keeping it from looping or passing bad values | Slower than a single call: about 4 model calls per request instead of 1. |
+| Kept the VibeMatch 1.0 scorer as the retriever's ranking step | Its weights were already tested and every score comes with a reason the model can quote | Its known genre bias (see [Limitations](#limitations-and-risks)) carries over into 2.0. |
 
 ---
 
@@ -601,6 +761,29 @@ Profile: Adversarial: Angry Classical
 
 ---
 
+## Testing Summary
+
+**What worked:**
+
+- All 37 pytest tests pass offline, using a fake model. They cover retrieval, the guardrails, self-correction, the fallback, the agent's step limit, rejection of bad tool input, and API key setup.
+- The checker caught made-up songs (e.g. "Made Up Song" is not one of the CANDIDATE SONGS), and the correction round fixed them. When the model kept failing, the template answer took over.
+- API errors (e.g. `APIConnectionError`) and a rejected API key fell back to the template or a clear message instead of crashing.
+- In agent mode, even the small local model followed the plan, called the tools, checked its picks, and passed `check_answer` (Example 2).
+
+**What didn't:**
+
+- The checker verifies song titles, not the reasons given. In Example 2, the model called "Moonlit Sonata No. 2" melancholic even though the catalog labels it peaceful, and nothing flagged it.
+- Keyword retrieval can't handle words outside the knowledge base. Requests like "polka" get no notes and 0.00 scores (Example 3).
+- The genre bias from VibeMatch 1.0 is still in the scorer: a genre label can outweigh the mood a user asks for (see the "Sad Banger" case below and in `model_card.md`).
+
+**What I learned:**
+
+- Checks written in code are more reliable than instructions in the prompt. The prompt asks the model to use only retrieved songs, but the code is what guarantees it.
+- A fallback path means the app always gives a useful answer, even with no key, no internet or a failing model.
+- Logging every step (`logs/vibematch.log`) made it easy to see exactly where a run went wrong: which notes were retrieved, which check failed, and why it fell back.
+
+---
+
 ## Limitations and Risks
 
 - **Tiny, uneven catalog.** It has 20 songs, and 14 of the 17 genres have exactly one song. After the first match, the list is often filler.
@@ -615,13 +798,16 @@ More detail is in [`model_card.md`](model_card.md).
 
 ## Reflection
 
-Read and complete `model_card.md`:
-
-[**Model Card**](model_card.md)
+More detail is in the [**Model Card**](model_card.md).
 
 **How recommenders turn data into predictions.** Building this showed me that a "recommendation" is really two separate decisions. First, a scoring rule judges each song alone. Then a ranking rule turns those scores into a list. Neither step understands music. The system turns a vague idea like "I want something chill for studying" into a few numbers and labels, measures the distance between those and every song, and sorts. What surprised me is how *right* that can feel. The lofi study list is honestly the playlist I'd make myself, and the explanations ("mood match +1.5") make it sound thoughtful even though it's just addition.
 
 **Where bias and unfairness show up.** Bias showed up without any bugs. Every rule was reasonable on its own, but a 2-point genre label beat a 1.5-point mood match. So a user who wanted *sad* pop got an upbeat workout song, and an "angry classical" user got a peaceful piano piece. The data added its own bias: most genres have one song, the catalog leans high-energy, and spelling decides whether you get credit ("lo-fi" loses, "k-pop" wins by accident). The users who get the worst results are the ones whose taste doesn't fit the common patterns, and the results still *look* plausible, so nobody would notice without testing edge cases on purpose. In a real app, with millions of users and no explanations, those quiet failures would be much harder to see.
 
+**What VibeMatch 2.0 added to that picture.** Putting an AI model on top of the scorer made the app much easier to talk to, but it didn't make the underlying data any fairer. The model can only pick from what the retriever hands it, so the scorer's genre bias and the small catalog still shape every answer. The checks I wrote catch made-up songs, but not a confident reason that stretches the truth, like calling a "peaceful" piano piece "melancholic."
 
+**Future improvements.**
 
+- Check the model's reasons against the catalog labels, not just the song titles.
+- Use embedding search for the knowledge base so requests like "polka" or "rainy day" match related notes.
+- Grow the catalog so most genres and moods have more than one song.
