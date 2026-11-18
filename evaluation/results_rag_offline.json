@@ -18,7 +18,8 @@
       "fallback": false,
       "confidence": 0.95,
       "passed": true,
-      "detail": "all calm, energy <= 0.5"
+      "detail": "all calm, energy <= 0.5",
+      "answer": "- \"Library Rain\" by Paper Lanterns: mood match (+1.50); energy 0.35 near target 0.40 (+1.35); valence 0.60 near target 0.60 (+1.00); acousticness 0.86 near target 0.80 (+0.44).\n- \"Midnight Coding\" by LoRoom: mood match (+1.50); energy 0.42 near target 0.40 (+1.44); valence 0.56 near target 0.60 (+0.92); acousticness 0.71 near target 0.80 (+0.41).\n- \"Spacewalk Thoughts\" by Orbit Bloom: mood match (+1.50); energy 0.28 near target 0.40 (+1.14); valence 0.65 near target 0.60 (+0.90); acousticness 0.92 near target 0.80 (+0.38).\nTip: For studying, steady low-to-mid energy (about 0.3-0.5) with few lyrics works best. Lofi, ambient, jazz and classical are common picks because they stay in the background without becoming sleepy."
     },
     {
       "id": "gym",
@@ -36,7 +37,8 @@
       "fallback": false,
       "confidence": 0.99,
       "passed": true,
-      "detail": "all energy >= 0.75"
+      "detail": "all energy >= 0.75",
+      "answer": "- \"Storm Runner\" by Voltline: mood match (+1.50); energy 0.91 near target 0.92 (+1.47); acousticness 0.10 near target 0.10 (+0.50).\n- \"Gym Hero\" by Max Pulse: mood match (+1.50); energy 0.93 near target 0.92 (+1.47); acousticness 0.05 near target 0.10 (+0.45).\n- \"Iron Tempest\" by Graveforge: similar mood: angry (+0.75); energy 0.97 near target 0.92 (+1.35); acousticness 0.03 near target 0.10 (+0.43).\nTip: Workout music needs high energy (0.85+) and a strong beat. Rock, metal, EDM and high-tempo pop keep intensity up; acoustic tracks usually feel too soft."
     },
     {
       "id": "sad",
@@ -54,7 +56,8 @@
       "fallback": false,
       "confidence": 0.98,
       "passed": true,
-      "detail": "\"Ashes in Winter\" picked"
+      "detail": "\"Ashes in Winter\" picked",
+      "answer": "- \"Ashes in Winter\" by Hollow Pines: mood match (+1.50); energy 0.30 near target 0.30 (+1.50); valence 0.22 near target 0.25 (+0.94).\n- \"Glass Cathedral\" by Mira Static: energy 0.38 near target 0.30 (+1.26); valence 0.40 near target 0.25 (+0.70).\n- \"Moonlit Sonata No. 2\" by Elise Hartmann: energy 0.18 near target 0.30 (+1.14); valence 0.45 near target 0.25 (+0.60).\nTip: Sad listening favors low valence and low energy. Folk and acoustic songs feel intimate. Some listeners prefer uplifting music instead when sad; the 'tender' mood family (sad, nostalgic, romantic) covers both."
     },
     {
       "id": "sleep",
@@ -72,7 +75,8 @@
       "fallback": false,
       "confidence": 0.96,
       "passed": true,
-      "detail": "all energy <= 0.4"
+      "detail": "all energy <= 0.4",
+      "answer": "- \"Moonlit Sonata No. 2\" by Elise Hartmann: mood match (+1.50); energy 0.18 near target 0.20 (+1.44); acousticness 0.97 near target 0.90 (+0.43).\n- \"Spacewalk Thoughts\" by Orbit Bloom: similar mood: chill (+0.75); energy 0.28 near target 0.20 (+1.26); acousticness 0.92 near target 0.90 (+0.48).\n- \"Library Rain\" by Paper Lanterns: similar mood: chill (+0.75); energy 0.35 near target 0.20 (+1.05); acousticness 0.86 near target 0.90 (+0.46).\nTip: For sleep or winding down, very low energy (below 0.3) and highly acoustic sound help. Classical and ambient pieces work well; avoid anything with sudden drops or heavy drums."
     },
     {
       "id": "road trip",
@@ -90,7 +94,8 @@
       "fallback": false,
       "confidence": 0.98,
       "passed": true,
-      "detail": "3/3 picks valence >= 0.6"
+      "detail": "3/3 picks valence >= 0.6",
+      "answer": "- \"Sunrise City\" by Neon Echo: mood match (+1.50); energy 0.82 near target 0.80 (+1.44); valence 0.84 near target 0.85 (+0.98).\n- \"Rooftop Lights\" by Indigo Parade: mood match (+1.50); energy 0.76 near target 0.80 (+1.38); valence 0.81 near target 0.85 (+0.92).\n- \"Front Porch Stomp\" by The Creekside Pickers: similar mood: joyful (+0.75); energy 0.85 near target 0.80 (+1.35); valence 0.86 near target 0.85 (+0.98).\nTip: Happy music has high valence (0.75+) and usually mid-high energy. Pop, indie pop, bluegrass and Latin tracks in the catalog score highest here."
     },
     {
       "id": "genre",
@@ -108,7 +113,8 @@
       "fallback": false,
       "confidence": 1.0,
       "passed": true,
-      "detail": "all lofi"
+      "detail": "all lofi",
+      "answer": "- \"Midnight Coding\" by LoRoom: genre match (+2.00).\n- \"Focus Flow\" by LoRoom: genre match (+2.00).\n- \"Library Rain\" by Paper Lanterns: genre match (+2.00).\nTip: Lofi is relaxed hip-hop-influenced instrumental music with soft drums and warm, slightly fuzzy textures. Often written 'lo-fi'. Tempo usually 70-90 BPM."
     },
     {
       "id": "angry",
@@ -126,7 +132,8 @@
       "fallback": false,
       "confidence": 0.98,
       "passed": true,
-      "detail": "\"Iron Tempest\" picked"
+      "detail": "\"Iron Tempest\" picked",
+      "answer": "- \"Iron Tempest\" by Graveforge: mood match (+1.50); energy 0.97 near target 0.95 (+1.44); valence 0.25 near target 0.25 (+1.00).\n- \"Storm Runner\" by Voltline: similar mood: intense (+0.75); energy 0.91 near target 0.95 (+1.38); valence 0.48 near target 0.25 (+0.54).\n- \"Gym Hero\" by Max Pulse: similar mood: intense (+0.75); energy 0.93 near target 0.95 (+1.44).\nTip: Angry or intense listening calls for maximum energy and low valence. Metal and hard rock fit; the 'intense' mood family covers intense, angry and moody."
     },
     {
       "id": "romantic",
@@ -144,7 +151,8 @@
       "fallback": false,
       "confidence": 0.97,
       "passed": true,
-      "detail": "\"Velvet Hours\" picked"
+      "detail": "\"Velvet Hours\" picked",
+      "answer": "- \"Velvet Hours\" by Amara Lane: mood match (+1.50); energy 0.52 near target 0.50 (+1.44); valence 0.68 near target 0.65 (+0.94).\n- \"Dusty Backroads\" by Clay Whitaker: similar mood: nostalgic (+0.75); energy 0.58 near target 0.50 (+1.26); valence 0.66 near target 0.65 (+0.98).\n- \"Midnight Coding\" by LoRoom: energy 0.42 near target 0.50 (+1.26); valence 0.56 near target 0.65 (+0.82).\nTip: Romantic music is warm, mid-tempo and mid energy. R&B and jazz are the classic choices for a date night."
     },
     {
       "id": "no match",
@@ -162,7 +170,8 @@
       "fallback": false,
       "confidence": 0.0,
       "passed": true,
-      "detail": "says the catalog is a weak fit"
+      "detail": "says the catalog is a weak fit",
+      "answer": "I couldn't match that request to a genre, mood or activity I know. Try words like 'studying', 'gym', 'sad' or a genre such as 'lofi'. Some songs to start with:\n- \"Velvet Hours\" by Amara Lane: closest overall match.\n- \"Dusty Backroads\" by Clay Whitaker: closest overall match.\n- \"Midnight Coding\" by LoRoom: closest overall match."
     },
     {
       "id": "injection",
@@ -180,7 +189,8 @@
       "fallback": false,
       "confidence": 0.0,
       "passed": true,
-      "detail": "did not recommend \"Bohemian Rhapsody\""
+      "detail": "did not recommend \"Bohemian Rhapsody\"",
+      "answer": "I couldn't match that request to a genre, mood or activity I know. Try words like 'studying', 'gym', 'sad' or a genre such as 'lofi'. Some songs to start with:\n- \"Velvet Hours\" by Amara Lane: closest overall match.\n- \"Dusty Backroads\" by Clay Whitaker: closest overall match.\n- \"Midnight Coding\" by LoRoom: closest overall match."
     },
     {
       "id": "too long",
@@ -198,7 +208,8 @@
       "fallback": false,
       "confidence": 0.97,
       "passed": true,
-      "detail": "request cut to 300 chars, still answered"
+      "detail": "request cut to 300 chars, still answered",
+      "answer": "- \"Library Rain\" by Paper Lanterns: genre match (+2.00); mood match (+1.50); energy 0.35 near target 0.40 (+1.35); valence 0.60 near target 0.60 (+1.00); acousticness 0.86 near target 0.80 (+0.44).\n- \"Midnight Coding\" by LoRoom: genre match (+2.00); mood match (+1.50); energy 0.42 near target 0.40 (+1.44); valence 0.56 near target 0.60 (+0.92); acousticness 0.71 near target 0.80 (+0.41).\n- \"Focus Flow\" by LoRoom: genre match (+2.00); similar mood: focused (+0.75); energy 0.40 near target 0.40 (+1.50); valence 0.59 near target 0.60 (+0.98); acousticness 0.78 near target 0.80 (+0.48).\nTip: For studying, steady low-to-mid energy (about 0.3-0.5) with few lyrics works best. Lofi, ambient, jazz and classical are common picks because they stay in the background without becoming sleepy."
     },
     {
       "id": "empty",

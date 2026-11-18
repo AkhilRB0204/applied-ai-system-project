@@ -156,6 +156,7 @@ def run_case(case, songs, knowledge_base, client, agent: bool) -> Dict:
         confidence=confidence(result),
         passed=passed,
         detail=detail,
+        answer=result.answer,
     )
     return row
 
