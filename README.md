@@ -232,13 +232,14 @@ Retrieval draws on **two data sources**: the song catalog (`data/songs.csv`) and
 | Top picks | Velvet Hours (r&b, energy 0.52), Dusty Backroads (country, 0.58), Midnight Coding (lofi, 0.42), all scored 0.00 | Moonlit Sonata No. 2 (classical, energy 0.18), Spacewalk Thoughts (ambient, 0.28), Library Rain (lofi, 0.35) |
 | Answer | "I couldn't match that request…" | Three low-energy, acoustic picks, plus the note's tip: "For sleep or winding down, very low energy (below 0.3) and highly acoustic sound help…" |
 
-**Measured on all 12 evaluation cases** (`python -m src.evaluate --offline` vs `--offline --no-notes`):
+**Measured on all 12 evaluation cases** (`python -m src.evaluate` with and without `--no-notes`):
 
-| Retrieval | Criterion passed | Avg confidence |
-|---|---|---|
-| Catalog only | 10/12 (fails "fall asleep" and "work out at the gym") | 0.64 |
-| Catalog + knowledge base | **12/12** | **0.80** |
-@@NONOTES_AI@@
+| Retrieval | Answers written by | Criterion passed | Avg confidence |
+|---|---|---|---|
+| Catalog only | Template (offline) | 10/12 (fails "fall asleep" and "work out at the gym") | 0.64 |
+| Catalog + knowledge base | Template (offline) | **12/12** | **0.80** |
+| Catalog only | Local model | 9/12 (also fails "polka": it presented weak matches as a good fit) | 0.64 |
+| Catalog + knowledge base | Local model | **12/12** | **0.80** |
 The notes matter most for requests described by activity instead of by genre or mood. "Chill music for studying" works either way, because "chill" is already a mood in the catalog.
 
 ## AI Feature: Agentic Workflow (`--agent`)
@@ -787,7 +788,7 @@ Profile: Adversarial: Angry Classical
 
 ## Testing Summary
 
-**In short:** 42/42 automated tests pass. On 12 scored requests, the local model passed 12/12 criteria in RAG mode and @@AGENT_SHORT@@ in agent mode, and every answer was grounded in retrieved songs. Average retrieval confidence was 0.80, and it correctly dropped to 0.00 for requests the catalog can't serve. The model struggled with consistency: the "polka" request failed on one run and passed on an identical one. Accuracy improved after the evaluation exposed a retrieval bug ("work out" matched the *study* note), which I fixed.
+**In short:** 42/42 automated tests pass. On 12 scored requests, the local model passed 12/12 criteria in RAG mode and 12/12 in agent mode, and every answer was grounded in retrieved songs. Average retrieval confidence was 0.80, and it correctly dropped to 0.00 for requests the catalog can't serve. The model struggled with consistency: the "polka" request failed on one run and passed on an identical one. Accuracy improved after the evaluation exposed a retrieval bug ("work out" matched the *study* note), which I fixed.
 
 ### Reliability evaluation
 
@@ -797,7 +798,7 @@ Profile: Adversarial: Angry Classical
 |---|---|---|---|---|---|---|
 | RAG, offline (no AI) | 12/12 | 11/11 | n/a | n/a | 0.80 | 0.0s |
 | RAG, local model | 12/12 | 11/11 | 11/11 | 0 | 0.80 | 3.2s |
-| Agent, local model | @@AGENT_ROW@@ |
+| Agent, local model | 12/12 | 11/11 | 10/11 | 1 (the injection case) | 0.83 | 10.2s |
 
 | Test input | Evaluation criterion | Result (RAG, local model) |
 |---|---|---|

@@ -179,7 +179,7 @@ VibeMatch 2.0 adds an AI model on top of the scorer (see the README), so I measu
 |---|---|---|---|---|---|---|
 | RAG, offline | 12/12 | 11/11 | n/a | n/a | 0.80 | 0.0s |
 | RAG, local model | 12/12 | 11/11 | 11/11 | 0 | 0.80 | 3.2s |
-| Agent, local model | @@AGENT_ROW@@ |
+| Agent, local model | 12/12 | 11/11 | 10/11 | 1 (the injection case) | 0.83 | 10.2s |
 | RAG, offline, **without the knowledge base** | 10/12 | 11/11 | n/a | n/a | 0.64 | 0.0s |
 
 The 12th case is an empty request, which is correctly rejected before anything runs, so it has no answer to ground.
@@ -220,7 +220,7 @@ The 12th case is an empty request, which is correctly rejected before anything r
 
 | Possible misuse | What prevents or limits it |
 |---|---|
-| **Prompt injection:** using the request to make the model say something else or recommend songs that aren't in the catalog | The request is treated as data in the prompt. `check_answer` rejects any pick that wasn't retrieved, and if the model keeps failing, the template answer is used. Tested with the "Bohemian Rhapsody" case: the RAG model ignored the injection, and in agent mode the model refused and the app fell back to the template. |
+| **Prompt injection:** using the request to make the model say something else or recommend songs that aren't in the catalog | The request is treated as data in the prompt. `check_answer` rejects any pick that wasn't retrieved, and if the model keeps failing, the template answer is used. Tested with the "Bohemian Rhapsody" case: the RAG model ignored the injection and added "None of these match the request for 'Bohemian Rhapsody'". In agent mode the model twice answered without any catalog picks, so `check_answer` rejected both answers and the app fell back to the template. |
 | **Running up someone's Claude bill:** if the app were hosted with a key, anyone could send unlimited requests | Requests are cut to 300 characters, answers are capped (160 words, 600 tokens on the local model), and the agent has an 8-step limit. The key lives in `.env`, which is git-ignored, and a key pasted into the web page is never saved. The real fix is to never deploy it publicly with a key; the free local model is the default instead. |
 | **Using it as a general chatbot** | The system prompt limits it to music from this catalog, and answers that don't contain catalog picks in the required format fail the check. |
 | **Promoting chosen songs or artists:** editing the knowledge base to push certain songs | The notes are plain JSON in version control, so changes are visible in review. Every answer shows which notes and songs it was based on, so a bias would be visible to the user. |
@@ -232,7 +232,7 @@ The 12th case is an empty request, which is correctly rejected before anything r
 - **The same model gave different results on identical runs.** "Polka" failed on one run and passed on the next. I had expected a small, low-temperature model to be repeatable.
 - **The small local model stayed grounded.** A 4-billion-parameter model running on my laptop produced grounded answers for every request, mostly on the first try, because the code, not the model, decides which songs are allowed.
 - **The knowledge base mattered less than I expected for clear requests.** Without it, "chill music for studying" still works because "chill" is a mood in the catalog. The notes earn their place on requests with no music words: "fall asleep" and "work out" both fail without them.
-- **Guardrails worked by failing safely.** In agent mode, the model refused the injection request outright, and the answer check plus fallback still turned that into a useful answer instead of an error.
+- **Guardrails worked by failing safely.** In agent mode, the injection request derailed the model: it skipped the tools and twice answered without any catalog picks. The answer check rejected both answers, and the fallback still gave the user a useful answer instead of an error.
 
 ### Collaboration with AI
 
