@@ -21,7 +21,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 try:
     from src.recommender import recommend_songs
@@ -31,6 +31,7 @@ except ImportError:
 MODEL = "claude-opus-5-5"
 MAX_ATTEMPTS = 2  # first try + one self-correction retry
 MAX_QUERY_CHARS = 300  # guardrail: longer requests are cut to this length
+MAX_ANSWER_WORDS = 160  # guardrail: rejects rambling answers (the prompt asks for < 120)
 
 logger = logging.getLogger("vibematch.rag")
 
@@ -57,6 +58,7 @@ class RagResult:
     answer: str = ""
     source: str = ""  # "claude", "fallback" or "offline"
     log: List[str] = field(default_factory=list)
+    model: str = ""  # which AI model wrote the answer, if any
     logger_name: str = "vibematch.rag"
 
     def note(self, message: str, level: int = logging.INFO) -> None:
@@ -151,17 +153,95 @@ def _format_context(query: str, notes: List[Dict], candidates: List[tuple]) -> s
     return "\n".join(lines)
 
 
-def make_client():
-    """Return an Anthropic client, or None when no API credentials are set."""
-    if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
-        logger.info("No ANTHROPIC_API_KEY set: running offline")
-        return None
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ENV_PATH = os.path.join(PROJECT_ROOT, ".env")
+
+
+def read_env_value(name: str, path: Optional[str] = None) -> str:
+    """Read one setting from the project's .env file (re-read on every call, so
+    editing .env takes effect without restarting). Returns "" if missing."""
+    path = path or ENV_PATH
     try:
-        import anthropic
+        from dotenv import dotenv_values
     except ImportError:
-        logger.warning("anthropic package not installed: running offline")
+        logger.warning("python-dotenv not installed: .env file ignored")
+        return ""
+    return (dotenv_values(path).get(name) or "").strip()
+
+
+def setting(name: str, default: str = "") -> str:
+    """A setting from the shell environment, else the .env file, else the default."""
+    return os.environ.get(name, "").strip() or read_env_value(name) or default
+
+
+def find_api_key(api_key: Optional[str] = None) -> str:
+    """Claude key lookup order: explicit argument, shell ANTHROPIC_API_KEY, then .env file."""
+    return (api_key or "").strip() or setting("ANTHROPIC_API_KEY")
+
+
+def make_client(api_key: Optional[str] = None, provider: Optional[str] = None):
+    """Return the AI model client, or None for offline mode.
+
+    VIBEMATCH_PROVIDER (shell or .env) picks the model:
+      auto   (default) Claude if an Anthropic API key is set, otherwise the free local Ollama model
+      ollama           always the free local model (no key, no cost)
+      claude           always Claude (paid API key required)
+      offline          no AI model; template answers only
+    """
+    provider = (provider or setting("VIBEMATCH_PROVIDER", "auto")).lower()
+    key = find_api_key(api_key)
+
+    if provider == "offline":
+        logger.info("Provider: offline")
         return None
-    return anthropic.Anthropic()
+    if provider == "claude" or (provider == "auto" and key):
+        if not key:
+            logger.warning("VIBEMATCH_PROVIDER=claude but no ANTHROPIC_API_KEY: running offline")
+            return None
+        try:
+            import anthropic
+        except ImportError:
+            logger.warning("anthropic package not installed: running offline")
+            return None
+        logger.info("Provider: Claude (%s)", MODEL)
+        return anthropic.Anthropic(api_key=key)
+
+    try:
+        from src.llm import OllamaClient
+    except ImportError:
+        from llm import OllamaClient
+    client = OllamaClient(model=setting("OLLAMA_MODEL") or None, base_url=setting("OLLAMA_URL") or None)
+    logger.info("Provider: Ollama (%s)", client.model)
+    return client
+
+
+def model_name(client) -> str:
+    """Human-readable name of the model behind a client."""
+    return getattr(client, "display_name", None) or f"Claude ({MODEL})"
+
+
+def check_api_key(client) -> Tuple[bool, str]:
+    """Confirm the model is usable before answering requests. Returns (ok, message).
+
+    Ollama: checks the server is running and the model is downloaded.
+    Claude: makes one free request (list models), using no tokens or credits.
+    """
+    if hasattr(client, "check"):
+        return client.check()
+    import anthropic
+    try:
+        client.models.list(limit=1)
+    except anthropic.AuthenticationError:
+        return False, ("Claude rejected the API key (401). Create a new key at platform.claude.com -> API Keys "
+                       "and put the whole key in the .env file as ANTHROPIC_API_KEY=sk-ant-..., or remove it "
+                       "to use the free local model.")
+    except anthropic.PermissionDeniedError:
+        return False, "The API key is valid but not allowed to use the API (403). Check the key's workspace in the Console."
+    except anthropic.APIConnectionError:
+        return False, "Could not reach api.anthropic.com. Check your internet connection."
+    except anthropic.APIError as error:
+        return False, f"The API returned an error while checking the key: {error}"
+    return True, f"Using {model_name(client)}"
 
 
 def _call_claude(client, messages: List[Dict]):
@@ -202,6 +282,9 @@ def check_answer(answer: str, candidates: List[tuple], songs: List[Dict]) -> Lis
 
     if not picks:
         problems.append('No picks found in the required format: - "Song Title" by Artist: reason')
+    if len(answer.split()) > MAX_ANSWER_WORDS:
+        problems.append(f"The answer is {len(answer.split())} words; keep it under {MAX_ANSWER_WORDS} "
+                        "and include only the picks and an optional one-sentence note.")
     for title in picks:
         if title.lower() not in allowed:
             problems.append(f'"{title}" is not one of the CANDIDATE SONGS.')
@@ -258,13 +341,18 @@ def ask(
         result.note("No API key set: used template answer from retrieved data")
         return result
 
-    import anthropic
+    try:
+        from src.llm import llm_errors
+    except ImportError:
+        from llm import llm_errors
 
+    result.model = model_name(client)
+    result.note(f"Generating with {result.model}")
     messages = [{"role": "user", "content": _format_context(query, notes, candidates)}]
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             response = _call_claude(client, messages)
-        except anthropic.APIError as error:
+        except llm_errors() as error:
             result.note(f"Attempt {attempt}: API error ({type(error).__name__}): {error}", logging.ERROR)
             break
         if response is None:

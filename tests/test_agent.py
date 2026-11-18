@@ -121,7 +121,7 @@ def test_unknown_tool_is_rejected():
 def test_agent_without_api_key_uses_offline_pipeline():
     result = ask_agent("music for the gym", SONGS, KB, client=None)
     assert result.source == "offline"
-    assert "needs an API key" in result.log[0]
+    assert "needs an AI model" in result.log[0]
 
 
 def test_main_agent_flag_runs_offline(capsys):

@@ -16,7 +16,8 @@ def run_app():
 
 def test_app_answers_a_request_offline():
     app = run_app()
-    app.toggle[0].set_value(True).run()  # offline mode, so no API call
+    model_choice = [r for r in app.radio if r.label == "AI model"][0]
+    model_choice.set_value("Offline (no AI)").run()
     request_box = [box for box in app.text_input if box.label == "Your request"][0]
     request_box.input("music for the gym")
     app.button[0].click().run()
@@ -28,6 +29,6 @@ def test_app_answers_a_request_offline():
 
 def test_app_rejects_empty_request():
     app = run_app()
-    app.toggle[0].set_value(True).run()
+    [r for r in app.radio if r.label == "AI model"][0].set_value("Offline (no AI)").run()
     app.button[0].click().run()
     assert any("describe what you want" in w.value for w in app.warning)

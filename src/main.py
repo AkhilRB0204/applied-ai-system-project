@@ -4,12 +4,14 @@ VibeMatch command-line app.
     python -m src.main "chill music for studying"   # ask in plain English (RAG)
     python -m src.main                              # interactive: keep asking
     python -m src.main --profiles                   # original 8-profile demo
-    python -m src.main --agent "..."                # agentic workflow: Claude plans + uses tools
-    python -m src.main --offline "..."              # skip Claude, template answer
+    python -m src.main --agent "..."                # agentic workflow: model plans + uses tools
+    python -m src.main --offline "..."              # no AI model, template answer
 
 Free-text requests go through the RAG pipeline in src/rag.py: retrieve notes
-and candidate songs, have Claude write the answer from them, then check it.
-With --agent, Claude instead plans its own steps, calls retrieval tools
+and candidate songs, have the AI model write the answer from them, then check
+it. The model is a free local one via Ollama by default, or Claude if an
+Anthropic API key is set (see VIBEMATCH_PROVIDER in .env.example).
+With --agent, the model instead plans its own steps, calls retrieval tools
 (src/agent.py) and checks its picks before answering.
 Every run is logged to logs/vibematch.log.
 """
@@ -22,16 +24,16 @@ from pathlib import Path
 # Works both as `python -m src.main` and `python src/main.py`.
 try:
     from src.agent import ask_agent
-    from src.rag import ask, load_knowledge_base, make_client
+    from src.rag import ask, check_api_key, load_knowledge_base, make_client
     from src.recommender import load_songs, recommend_songs
 except ImportError:
     from agent import ask_agent
-    from rag import ask, load_knowledge_base, make_client
+    from rag import ask, check_api_key, load_knowledge_base, make_client
     from recommender import load_songs, recommend_songs
 
 SOURCE_LABELS = {
-    "claude": "written by Claude from retrieved data",
-    "agent": "written by Claude agent after planning, tool use and checks",
+    "claude": "written by {model} from retrieved data",
+    "agent": "written by the {model} agent after planning, tool use and checks",
     "offline": "offline template",
     "fallback": "fallback template",
 }
@@ -101,7 +103,8 @@ def print_rag_result(result) -> None:
     print("=" * 64)
     print(f"Request: {result.query}")
     print("=" * 64)
-    print(f"Answer ({SOURCE_LABELS.get(result.source, result.source)}):")
+    label = SOURCE_LABELS.get(result.source, result.source).format(model=result.model or "AI model")
+    print(f"Answer ({label}):")
     print(result.answer)
     print("\nBased on retrieved notes:")
     for note in result.notes or [{"title": "(none)"}]:
@@ -149,8 +152,8 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="VibeMatch music recommender")
     parser.add_argument("request", nargs="*", help="what you want to listen to, in plain English")
     parser.add_argument("--profiles", action="store_true", help="run the original 8-profile demo")
-    parser.add_argument("--agent", action="store_true", help="agentic mode: Claude plans, calls tools, checks picks")
-    parser.add_argument("--offline", action="store_true", help="do not call Claude; use template answers")
+    parser.add_argument("--agent", action="store_true", help="agentic mode: the model plans, calls tools, checks picks")
+    parser.add_argument("--offline", action="store_true", help="do not call an AI model; use template answers")
     parser.add_argument("-v", "--verbose", action="store_true", help="print log messages to the screen")
     args = parser.parse_args(argv)
     setup_logging(args.verbose)
@@ -171,7 +174,15 @@ def main(argv=None) -> int:
 
     client = None if args.offline else make_client()
     if client is None:
-        print("Running offline (no ANTHROPIC_API_KEY or --offline): answers are templates built from retrieved data.\n")
+        print("Running offline: answers are templates built from retrieved data.\n")
+    else:
+        ok, message = check_api_key(client)
+        if not ok:
+            logger.error("Model check failed: %s", message)
+            print(f"{message}\nOr run with --offline to use template answers.")
+            return 1
+        logger.info("Model check passed: %s", message)
+        print(f"{message}\n")
 
     if args.request:
         run_request(" ".join(args.request), songs, knowledge_base, client, args.agent)

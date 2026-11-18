@@ -21,11 +21,11 @@ from typing import Dict, List
 
 try:
     from src.rag import (
-        MODEL, RagResult, _text_of, ask, check_answer, clean_query, retrieve_notes,
+        MODEL, RagResult, _text_of, ask, check_answer, clean_query, model_name, retrieve_notes,
     )
     from src.recommender import recommend_songs
 except ImportError:
-    from rag import MODEL, RagResult, _text_of, ask, check_answer, clean_query, retrieve_notes
+    from rag import MODEL, RagResult, _text_of, ask, check_answer, clean_query, model_name, retrieve_notes
     from recommender import recommend_songs
 
 MAX_STEPS = 8        # guardrail: most model calls per request
@@ -188,13 +188,19 @@ def ask_agent(query: str, songs: List[Dict], knowledge_base: List[Dict], client=
     result = RagResult(query=query, prefs={}, notes=[], candidates=[], logger_name="vibematch.agent")
 
     if client is None:
-        result.note("Agent mode needs an API key: using the offline RAG pipeline instead", logging.WARNING)
+        result.note("Agent mode needs an AI model (Ollama or Claude): using the offline RAG pipeline instead",
+                    logging.WARNING)
         offline = ask(query, songs, knowledge_base, client=None)
         offline.log = result.log + offline.log
         return offline
 
-    import anthropic
+    try:
+        from src.llm import llm_errors
+    except ImportError:
+        from llm import llm_errors
 
+    result.model = model_name(client)
+    result.note(f"Agent running on {result.model}")
     state = AgentState(songs, knowledge_base)
     messages = [{"role": "user", "content": f"LISTENER REQUEST: {query}"}]
     corrections = 0
@@ -211,7 +217,7 @@ def ask_agent(query: str, songs: List[Dict], knowledge_base: List[Dict], client=
                 betas=["server-side-fallback-2026-07-01"],
                 fallbacks="default",
             )
-        except anthropic.APIError as error:
+        except llm_errors() as error:
             result.note(f"Step {step}: API error ({type(error).__name__}): {error}", logging.ERROR)
             break
 

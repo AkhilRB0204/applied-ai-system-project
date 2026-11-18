@@ -46,6 +46,12 @@ def test_offline_answer_only_uses_retrieved_songs():
     assert check_answer(result.answer, result.candidates, SONGS) == []
 
 
+def test_check_rejects_rambling_answer():
+    result = ask("music for studying", SONGS, KB, client=None)
+    long = result.answer + " filler" * 200
+    assert any("words" in p for p in check_answer(long, result.candidates, SONGS))
+
+
 def test_check_flags_song_that_was_not_retrieved():
     result = ask("calm music to sleep", SONGS, KB, client=None)
     bad = '- "Iron Tempest" by Graveforge: very calming.'

@@ -208,8 +208,21 @@ source .venv/bin/activate          # Windows: .venv\Scripts\activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 
-export ANTHROPIC_API_KEY=sk-ant-...   # optional; Windows: set ANTHROPIC_API_KEY=sk-ant-...
+cp .env.example .env                 # Windows: copy .env.example .env
 ```
+
+### Add your API key (once)
+
+1. Create a key at https://platform.claude.com → **API Keys** (a claude.ai login or subscription does not work; new accounts may need credits under **Billing**).
+2. Open `.env` and paste the whole key after the `=`:
+
+   ```
+   ANTHROPIC_API_KEY=sk-ant-api03-...
+   ```
+
+Both the command line and the web page load `.env` automatically, so you never need to `export` the key or paste it again. `.env` is in `.gitignore`, so the key is never committed. A key exported in your shell takes priority over `.env`.
+
+On startup the app checks the key with a free request (listing models, no tokens used). If the key is wrong, the command line stops with a clear message and the web page shows it in red in the sidebar, instead of silently falling back to template answers. Skip the key entirely, or use `--offline`, to run with template answers.
 
 Run every command from the project folder (the app reads `data/` with relative paths).
 

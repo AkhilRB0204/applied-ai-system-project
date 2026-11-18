@@ -17,14 +17,20 @@ os.chdir(ROOT)  # data/ and logs/ paths are relative to the project folder
 
 from src.agent import ask_agent  # noqa: E402
 from src.main import PROFILES, setup_logging  # noqa: E402
-from src.rag import ask, load_knowledge_base, make_client  # noqa: E402
+from src.rag import ask, check_api_key, find_api_key, load_knowledge_base, make_client  # noqa: E402
 from src.recommender import load_songs, recommend_songs  # noqa: E402
 
 SOURCE_LABELS = {
-    "claude": "Written by Claude from retrieved data (RAG)",
-    "agent": "Written by the Claude agent after planning, tool use and checks",
-    "offline": "Offline template (no API key, or offline mode)",
-    "fallback": "Fallback template (Claude's answer failed the checks or the API failed)",
+    "claude": "Written by {model} from retrieved data (RAG)",
+    "agent": "Written by the {model} agent after planning, tool use and checks",
+    "offline": "Offline template (no AI model selected or available)",
+    "fallback": "Fallback template (the model's answer failed the checks, or the model call failed)",
+}
+
+PROVIDERS = {
+    "Free local model (Ollama)": "ollama",
+    "Claude (paid API key)": "claude",
+    "Offline (no AI)": "offline",
 }
 
 st.set_page_config(page_title="VibeMatch", page_icon="🎵", layout="wide")
@@ -36,14 +42,13 @@ def load_data():
     return load_songs("data/songs.csv"), load_knowledge_base("data/knowledge_base.json")
 
 
-def get_client(api_key: str, offline: bool):
-    """Client from the sidebar key, else from ANTHROPIC_API_KEY, else None (offline)."""
-    if offline:
-        return None
-    if api_key:
-        import anthropic
-        return anthropic.Anthropic(api_key=api_key)
-    return make_client()
+@st.cache_data(ttl=30, show_spinner="Checking the AI model...")
+def model_status(provider: str, key: str):
+    """(ok, message) for a provider; ok is None in offline mode. Cached 30 s."""
+    client = make_client(key or None, provider=provider)
+    if client is None:
+        return None, "No AI model"
+    return check_api_key(client)
 
 
 def songs_table(candidates):
@@ -69,18 +74,32 @@ with st.sidebar:
         "Mode",
         ["RAG", "Agent"],
         help="RAG: fixed retrieve → generate → check pipeline. "
-             "Agent: Claude plans its own steps, calls retrieval tools and checks its picks.",
+             "Agent: the model plans its own steps, calls retrieval tools and checks its picks.",
     )
-    api_key = st.text_input(
-        "Anthropic API key (optional)", type="password",
-        help="Used only for this session and never saved. Leave empty to use ANTHROPIC_API_KEY, if set.",
-    )
-    offline = st.toggle("Offline mode (don't call Claude)", value=False)
-    client = get_client(api_key.strip(), offline)
-    if client is None:
-        st.info("Running offline: answers are templates built from retrieved data.")
+    provider = PROVIDERS[st.radio(
+        "AI model", list(PROVIDERS),
+        help="Ollama runs a free model on your computer (no key, no cost). "
+             "Claude needs a paid API key. Offline uses template answers only.",
+    )]
+    api_key = ""
+    if provider == "claude":
+        api_key = st.text_input(
+            "Anthropic API key (optional)", type="password",
+            help="Overrides ANTHROPIC_API_KEY from .env for this session only; never saved.",
+        ).strip()
+        if not find_api_key(api_key):
+            st.warning("No API key: add ANTHROPIC_API_KEY to .env or paste one above.")
+    ok, message = model_status(provider, find_api_key(api_key) if provider == "claude" else "")
+    if ok is None:
+        client = None
+        st.info("Offline: answers are templates built from retrieved data.")
+    elif not ok:
+        client = None
+        st.error(message)
+        st.caption("Using template answers until this is fixed. Click Rerun after fixing it.")
     else:
-        st.success("Claude is connected.")
+        client = make_client(api_key or None, provider=provider)
+        st.success(message)
 
 st.title("🎵 VibeMatch")
 st.caption("Describe what you want to listen to. Answers come only from songs and notes retrieved from this project's data.")
@@ -96,15 +115,24 @@ with tab_ask:
     if submitted:
         answer_fn = ask_agent if mode == "Agent" else ask
         try:
-            with st.spinner("Claude is planning and checking..." if mode == "Agent" else "Retrieving and generating..."):
+            with st.spinner("The agent is planning and checking..." if mode == "Agent" else "Retrieving and generating..."):
                 result = answer_fn(query, songs, knowledge_base, client)
         except ValueError as error:
             st.warning(str(error))
         except Exception as error:  # never show a raw traceback to the user
             st.error(f"Something went wrong: {error}. Details are in logs/vibematch.log.")
         else:
-            label = SOURCE_LABELS.get(result.source, result.source)
+            label = SOURCE_LABELS.get(result.source, result.source).format(model=result.model or "AI model")
             (st.success if result.source in ("claude", "agent") else st.info)(label)
+            log_text = " ".join(result.log)
+            if "AuthenticationError" in log_text:
+                st.error("Claude rejected the API key (401). Check that you pasted a complete, active key "
+                         "from platform.claude.com → API Keys. Showing the template answer instead.")
+            elif "PermissionDeniedError" in log_text or "credit balance" in log_text.lower():
+                st.error("The API key works but the account can't make requests. Check Billing / credits "
+                         "on platform.claude.com.")
+            elif "API error" in log_text:
+                st.error("The AI model call failed; see the pipeline log below for details.")
             st.subheader("Recommendation")
             st.text(result.answer)
 
