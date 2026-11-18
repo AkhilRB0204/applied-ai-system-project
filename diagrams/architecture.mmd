@@ -11,14 +11,14 @@ flowchart LR
     subgraph Process["Process: src/rag.py"]
         Guard["Input guardrail<br/>clean_query()"]
         Retriever["Retriever<br/>retrieve_notes() + recommend_songs()<br/>top 5 candidate songs"]
-        Generator["Generator: Claude<br/>writes 3 picks from<br/>retrieved data only"]
+        Generator["Generator: AI model<br/>(Claude or local Ollama)<br/>writes 3 picks from<br/>retrieved data only"]
         Evaluator{"Evaluator<br/>check_answer():<br/>all picks retrieved?"}
         Fallback["Fallback<br/>template answer"]
     end
 
     subgraph Agent["Agent mode --agent: src/agent.py"]
         Plan["Plan<br/>reason on every tool call"]
-        Tools["Act: Claude calls tools<br/>search_notes / find_songs<br/>(retries with new targets)"]
+        Tools["Act: model calls tools<br/>search_notes / find_songs<br/>(retries with new targets)"]
         SelfCheck["Check: check_picks<br/>then fix picks"]
     end
 
@@ -28,7 +28,7 @@ flowchart LR
     end
 
     subgraph Checks["Checking AI results"]
-        Tests["Tester: pytest<br/>25 offline tests, fake Claude"]
+        Tests["Tester: pytest<br/>37 offline tests, fake model"]
         Human["Human review<br/>user compares answer to sources;<br/>developer reads the log and<br/>--profiles adversarial demo"]
     end
 

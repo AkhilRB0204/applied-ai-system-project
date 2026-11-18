@@ -13,14 +13,14 @@ flowchart LR
     subgraph Process["Process: src/rag.py"]
         Guard["Input guardrail<br/>clean_query()"]
         Retriever["Retriever<br/>retrieve_notes() + recommend_songs()<br/>top 5 candidate songs"]
-        Generator["Generator: Claude<br/>writes 3 picks from<br/>retrieved data only"]
+        Generator["Generator: AI model<br/>(Claude or local Ollama)<br/>writes 3 picks from<br/>retrieved data only"]
         Evaluator{"Evaluator<br/>check_answer():<br/>all picks retrieved?"}
         Fallback["Fallback<br/>template answer"]
     end
 
     subgraph Agent["Agent mode --agent: src/agent.py"]
         Plan["Plan<br/>reason on every tool call"]
-        Tools["Act: Claude calls tools<br/>search_notes / find_songs<br/>(retries with new targets)"]
+        Tools["Act: model calls tools<br/>search_notes / find_songs<br/>(retries with new targets)"]
         SelfCheck["Check: check_picks<br/>then fix picks"]
     end
 
@@ -30,7 +30,7 @@ flowchart LR
     end
 
     subgraph Checks["Checking AI results"]
-        Tests["Tester: pytest<br/>25 offline tests, fake Claude"]
+        Tests["Tester: pytest<br/>37 offline tests, fake model"]
         Human["Human review<br/>user compares answer to sources;<br/>developer reads the log and<br/>--profiles adversarial demo"]
     end
 
@@ -59,15 +59,15 @@ flowchart LR
 |---|---|---|
 | Input guardrail | `clean_query()` in `src/rag.py` | Rejects empty requests, cuts ones over 300 characters |
 | Retriever | `retrieve_notes()`, `build_prefs()`, `recommend_songs()` | Finds matching knowledge-base notes, turns them into targets, retrieves the top 5 songs |
-| Generator | Claude `claude-opus-5-5` via `ask()` | Writes 3 picks using only the retrieved notes and songs |
-| Agent | `ask_agent()` in `src/agent.py`, with `--agent` | Claude plans each step, calls `search_notes` / `find_songs` / `check_picks`, and fixes its picks before answering |
+| Generator | Claude `claude-opus-5-5`, or the free local `qwen3:4b-instruct` via Ollama, through `ask()` | Writes 3 picks using only the retrieved notes and songs |
+| Agent | `ask_agent()` in `src/agent.py`, with `--agent` | The model plans each step, calls `search_notes` / `find_songs` / `check_picks`, and fixes its picks before answering |
 | Evaluator | `check_answer()` | Rejects picks that were not retrieved; triggers one retry, then the fallback |
-| Fallback | `fallback_answer()` | Template answer from retrieved data when Claude fails, errors or there is no API key |
+| Fallback | `fallback_answer()` | Template answer from retrieved data when the model fails, errors or no model is available |
 | Logger | `logs/vibematch.log` | Records every step and check result |
 | CLI | `src/main.py` | Runs requests, interactive mode, and the `--profiles` demo |
 
 ## Where results are checked
 
-- **Automatically, every request:** the evaluator checks Claude's answer before it is shown. In agent mode Claude also checks its own picks with `check_picks` first.
-- **Tests:** `pytest` runs 25 offline tests (scripted fake Claude client) covering the retriever, evaluator, retry, fallbacks, guardrails, and the agent's loop, step limit and tool-input validation.
+- **Automatically, every request:** the evaluator checks the model's answer before it is shown. In agent mode the model also checks its own picks with `check_picks` first.
+- **Tests:** `pytest` runs 37 offline tests (scripted fake model client) covering the retriever, evaluator, retry, fallbacks, guardrails, and the agent's loop, step limit and tool-input validation.
 - **Humans:** the user sees the answer next to the notes and songs it came from, so unsupported claims are easy to spot; the developer reviews `logs/vibematch.log` and the adversarial profiles in `python -m src.main --profiles` (findings in `model_card.md`).
