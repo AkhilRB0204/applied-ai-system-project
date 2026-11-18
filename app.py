@@ -150,7 +150,7 @@ with tab_ask:
                 st.json(result.prefs or {})
 
             st.subheader("Retrieved songs")
-            st.dataframe(songs_table(result.candidates), hide_index=True, use_container_width=True)
+            st.dataframe(songs_table(result.candidates), hide_index=True, width="stretch")
 
             with st.expander("Pipeline log (also saved to logs/vibematch.log)", expanded=mode == "Agent"):
                 for line in result.log:
@@ -165,10 +165,10 @@ with tab_profiles:
     st.json(prefs)
     st.dataframe(
         songs_table([(s, score, reasons) for s, score, reasons in recommend_songs(prefs, songs, k=5)]),
-        hide_index=True, use_container_width=True,
+        hide_index=True, width="stretch",
     )
 
 # ---------------------------------------------------------------- catalog
 with tab_catalog:
     st.write(f"{len(songs)} songs in `data/songs.csv`.")
-    st.dataframe(pd.DataFrame(songs), hide_index=True, use_container_width=True)
+    st.dataframe(pd.DataFrame(songs), hide_index=True, width="stretch")
